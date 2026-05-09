@@ -10,3 +10,19 @@ body {
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
 }
+
+@media (max-width: 768px) {
+  .nav-links { display: none !important; }
+  .nav-right { display: none !important; }
+  .nav-hamburger { display: flex !important; }
+}
+
+@media (min-width: 769px) {
+  .nav-hamburger { display: none !important; }
+  .nav-mobile-menu { display: none !important; }
+}
+
+@media (max-width: 768px) {
+ .login-brand { display: none !important; }
+ .login-mobile-logo { display: flex !important; }
+}

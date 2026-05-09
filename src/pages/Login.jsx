@@ -34,7 +34,8 @@ export default function Login() {
 
   return (
     <div style={styles.page}>
-      <div style={styles.brand}>
+      {/* Panel izquierdo - solo visible en desktop */}
+      <div className="login-brand" style={styles.brand}>
         <div style={styles.brandInner}>
           <div style={styles.logo}>
             <span style={styles.logoIcon}>📦</span>
@@ -59,7 +60,14 @@ export default function Login() {
         </div>
       </div>
 
+      {/* Panel derecho - formulario */}
       <div style={styles.formPanel}>
+        {/* Logo mobile */}
+        <div className="login-mobile-logo" style={styles.mobileLogo}>
+          <span style={styles.mobileLogoIcon}>📦</span>
+          <span style={styles.mobileLogoText}>StockFlow RD</span>
+        </div>
+
         <div style={styles.formCard}>
           <div style={styles.formHeader}>
             <h2 style={styles.formTitle}>Bienvenido de vuelta</h2>
@@ -190,10 +198,23 @@ const styles = {
   formPanel: {
     flex: 1,
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     background: "#f8fafc",
     padding: "40px 24px",
+  },
+  mobileLogo: {
+    display: "none",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 24,
+  },
+  mobileLogoIcon: { fontSize: 28 },
+  mobileLogoText: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: "#0f172a",
   },
   formCard: {
     width: "100%",
