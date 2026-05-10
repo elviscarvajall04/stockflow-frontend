@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { salesAPI, productsAPI } from "../services/api";
+import { salesAPI, productsAPI, clientsAPI } from "../services/api";
 import Navbar from "../components/Navbar";
 import toast from "react-hot-toast";
 import { useExportPDF } from "../hooks/usePDF";
@@ -7,6 +7,7 @@ import { useExportPDF } from "../hooks/usePDF";
 export default function Sales() {
   const [sales, setSales] = useState([]);
   const [products, setProducts] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [items, setItems] = useState([{ product_id: "", quantity: 1 }]);
@@ -15,14 +16,16 @@ export default function Sales() {
   const [paymentMethod, setPaymentMethod] = useState("efectivo");
   const [received, setReceived] = useState("");
   const [reference, setReference] = useState("");
+  const [clientId, setClientId] = useState("");
   const { exportSales } = useExportPDF();
 
   const loadData = () => {
     setLoading(true);
-    Promise.all([salesAPI.getAll(), productsAPI.getAll()])
-      .then(([salesData, productsData]) => {
+    Promise.all([salesAPI.getAll(), productsAPI.getAll(), clientsAPI.getAll()])
+      .then(([salesData, productsData, clientsData]) => {
         setSales(Array.isArray(salesData) ? salesData : []);
         setProducts(Array.isArray(productsData) ? productsData : []);
+        setClients(Array.isArray(clientsData) ? clientsData : []);
       })
       .catch(() => toast.error("Error cargando datos"))
       .finally(() => setLoading(false));
@@ -35,6 +38,7 @@ export default function Sales() {
     setPaymentMethod("efectivo");
     setReceived("");
     setReference("");
+    setClientId("");
     setShowModal(true);
   };
 
@@ -84,6 +88,7 @@ export default function Sales() {
     try {
       await salesAPI.create({
         user_id: JSON.parse(localStorage.getItem("user"))?.id,
+        client_id: clientId ? Number(clientId) : null,
         items: validItems.map((i) => ({
           product_id: Number(i.product_id),
           quantity: Number(i.quantity),
@@ -197,7 +202,7 @@ export default function Sales() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  {["ID", "Vendedor", "Total", "Método de pago", "Fecha"].map((h) => (
+                  {["ID", "Vendedor", "Cliente", "Total", "Método de pago", "Fecha"].map((h) => (
                     <th key={h} style={styles.th}>{h}</th>
                   ))}
                 </tr>
@@ -205,7 +210,7 @@ export default function Sales() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={styles.empty}>
+                    <td colSpan={6} style={styles.empty}>
                       No hay ventas en este período.
                     </td>
                   </tr>
@@ -214,6 +219,7 @@ export default function Sales() {
                     <tr key={s.sale_id ?? s.id} style={styles.tr}>
                       <td style={styles.td}>#{s.sale_id ?? s.id ?? "—"}</td>
                       <td style={styles.td}>{s.user_name}</td>
+                      <td style={styles.td}>{s.client_name || "—"}</td>
                       <td style={{ ...styles.td, fontWeight: 600, color: "#059669" }}>
                         ${Number(s.total).toLocaleString("es-DO")}
                       </td>
@@ -250,6 +256,23 @@ export default function Sales() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h2 style={styles.modalTitle}>Nueva venta</h2>
             <form onSubmit={handleSubmit} style={styles.form}>
+
+              {/* Cliente */}
+              <div style={styles.field}>
+                <label style={styles.label}>Cliente (opcional)</label>
+                <select
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  style={styles.select}
+                >
+                  <option value="">Sin cliente / Venta general</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.phone ? `— ${c.phone}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {/* Productos */}
               {items.map((item, index) => (
@@ -426,11 +449,13 @@ const styles = {
   },
   modalTitle: { fontSize: 20, fontWeight: 700, color: "#0f172a", margin: "0 0 24px" },
   form: { display: "flex", flexDirection: "column", gap: 14 },
-  itemRow: { display: "flex", gap: 10, alignItems: "center" },
+  field: { display: "flex", flexDirection: "column", gap: 8 },
+  label: { fontSize: 13, fontWeight: 600, color: "#374151" },
   select: {
     flex: 1, padding: "10px 12px", border: "1.5px solid #e2e8f0",
     borderRadius: 10, fontSize: 14, outline: "none", color: "#0f172a", background: "#fff",
   },
+  itemRow: { display: "flex", gap: 10, alignItems: "center" },
   qtyInput: {
     width: 80, padding: "10px 12px", border: "1.5px solid #e2e8f0",
     borderRadius: 10, fontSize: 14, outline: "none", color: "#0f172a", textAlign: "center",
@@ -451,8 +476,6 @@ const styles = {
   },
   totalLabel: { fontSize: 14, color: "#64748b", fontWeight: 500 },
   totalValue: { fontSize: 22, fontWeight: 700, color: "#059669" },
-  field: { display: "flex", flexDirection: "column", gap: 8 },
-  label: { fontSize: 13, fontWeight: 600, color: "#374151" },
   paymentBtns: { display: "flex", gap: 8, flexWrap: "wrap" },
   paymentBtn: {
     padding: "10px 16px", borderRadius: 10, fontSize: 13,
