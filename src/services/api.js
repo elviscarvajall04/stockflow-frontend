@@ -1,4 +1,4 @@
-const BASE_URL = "https://stockflow-rd-production.up.railway.app/api";
+const BASE_URL = "http://localhost:3000/api";
 
 function getToken() {
   return localStorage.getItem("token");
@@ -66,3 +66,18 @@ export const salesAPI = {
 export const reportsAPI = {
   getDashboard: () => request("/reports/dashboard"),
 };
+
+// CLIENTS
+export const clientsAPI = {
+  getAll: () => request("/clients"),
+  getById: (id) => request(`/clients/${id}`),
+  create: (payload) =>
+    request("/clients", { method: "POST", body: JSON.stringify(payload) }),
+  update: (id, payload) =>
+    request(`/clients/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  delete: (id) =>
+    request(`/clients/${id}`, { method: "DELETE" }),
+
+
+};
+
