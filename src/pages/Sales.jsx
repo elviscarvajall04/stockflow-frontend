@@ -12,14 +12,17 @@ export default function Sales() {
   const [items, setItems] = useState([{ product_id: "", quantity: 1 }]);
   const [formLoading, setFormLoading] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [paymentMethod, setPaymentMethod] = useState("efectivo");
+  const [received, setReceived] = useState("");
+  const [reference, setReference] = useState("");
   const { exportSales } = useExportPDF();
 
   const loadData = () => {
     setLoading(true);
     Promise.all([salesAPI.getAll(), productsAPI.getAll()])
       .then(([salesData, productsData]) => {
-        setSales(salesData);
-        setProducts(productsData);
+        setSales(Array.isArray(salesData) ? salesData : []);
+        setProducts(Array.isArray(productsData) ? productsData : []);
       })
       .catch(() => toast.error("Error cargando datos"))
       .finally(() => setLoading(false));
@@ -29,6 +32,9 @@ export default function Sales() {
 
   const openModal = () => {
     setItems([{ product_id: "", quantity: 1 }]);
+    setPaymentMethod("efectivo");
+    setReceived("");
+    setReference("");
     setShowModal(true);
   };
 
@@ -57,6 +63,12 @@ export default function Sales() {
     }, 0);
   };
 
+  const getChange = () => {
+    const total = getTotal();
+    const rec = Number(received || 0);
+    return rec - total;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const validItems = items.filter((i) => i.product_id && i.quantity > 0);
@@ -64,14 +76,21 @@ export default function Sales() {
       toast.error("Agrega al menos un producto válido");
       return;
     }
+    if (paymentMethod === "efectivo" && Number(received || 0) < getTotal()) {
+      toast.error("El monto recibido es menor al total");
+      return;
+    }
     setFormLoading(true);
     try {
       await salesAPI.create({
+        user_id: JSON.parse(localStorage.getItem("user"))?.id,
         items: validItems.map((i) => ({
           product_id: Number(i.product_id),
           quantity: Number(i.quantity),
         })),
-        user_id: JSON.parse(localStorage.getItem("user"))?.id,
+        payment_method: paymentMethod,
+        received: Number(received || 0),
+        reference: paymentMethod === "transferencia" ? reference : null,
       });
       toast.success("Venta registrada correctamente");
       closeModal();
@@ -118,6 +137,12 @@ export default function Sales() {
     { label: "Hoy", value: "today" },
     { label: "Esta semana", value: "week" },
     { label: "Este mes", value: "month" },
+  ];
+
+  const paymentMethods = [
+    { value: "efectivo", label: "💵 Efectivo" },
+    { value: "tarjeta", label: "💳 Tarjeta" },
+    { value: "transferencia", label: "🏦 Transferencia" },
   ];
 
   return (
@@ -172,7 +197,7 @@ export default function Sales() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  {["ID", "Vendedor", "Total", "Fecha"].map((h) => (
+                  {["ID", "Vendedor", "Total", "Método de pago", "Fecha"].map((h) => (
                     <th key={h} style={styles.th}>{h}</th>
                   ))}
                 </tr>
@@ -180,17 +205,31 @@ export default function Sales() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={4} style={styles.empty}>
+                    <td colSpan={5} style={styles.empty}>
                       No hay ventas en este período.
                     </td>
                   </tr>
                 ) : (
                   filtered.map((s) => (
-                    <tr key={s.id} style={styles.tr}>
-                      <td style={styles.td}>#{s.id ?? s.sale_id ?? "—"}</td>
+                    <tr key={s.sale_id ?? s.id} style={styles.tr}>
+                      <td style={styles.td}>#{s.sale_id ?? s.id ?? "—"}</td>
                       <td style={styles.td}>{s.user_name}</td>
                       <td style={{ ...styles.td, fontWeight: 600, color: "#059669" }}>
                         ${Number(s.total).toLocaleString("es-DO")}
+                      </td>
+                      <td style={styles.td}>
+                        <span style={{
+                          ...styles.methodBadge,
+                          background: s.payment_method === "efectivo" ? "#ecfdf5" :
+                            s.payment_method === "tarjeta" ? "#eef2ff" : "#fff7ed",
+                          color: s.payment_method === "efectivo" ? "#059669" :
+                            s.payment_method === "tarjeta" ? "#4f46e5" : "#ea580c",
+                        }}>
+                          {s.payment_method === "efectivo" ? "💵 Efectivo" :
+                            s.payment_method === "tarjeta" ? "💳 Tarjeta" :
+                              s.payment_method === "transferencia" ? "🏦 Transferencia" :
+                                s.payment_method || "N/A"}
+                        </span>
                       </td>
                       <td style={styles.td}>
                         {new Date(s.created_at).toLocaleDateString("es-DO", {
@@ -211,6 +250,8 @@ export default function Sales() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h2 style={styles.modalTitle}>Nueva venta</h2>
             <form onSubmit={handleSubmit} style={styles.form}>
+
+              {/* Productos */}
               {items.map((item, index) => (
                 <div key={index} style={styles.itemRow}>
                   <select
@@ -235,11 +276,7 @@ export default function Sales() {
                     style={styles.qtyInput}
                     placeholder="Cant."
                   />
-                  <button
-                    type="button"
-                    onClick={() => removeItem(index)}
-                    style={styles.removeBtn}
-                  >
+                  <button type="button" onClick={() => removeItem(index)} style={styles.removeBtn}>
                     ✕
                   </button>
                 </div>
@@ -249,12 +286,75 @@ export default function Sales() {
                 + Agregar producto
               </button>
 
+              {/* Total */}
               <div style={styles.totalBox}>
-                <span style={styles.totalLabel}>Total estimado</span>
+                <span style={styles.totalLabel}>Total</span>
                 <span style={styles.totalValue}>
                   ${getTotal().toLocaleString("es-DO")}
                 </span>
               </div>
+
+              {/* Método de pago */}
+              <div style={styles.field}>
+                <label style={styles.label}>Método de pago</label>
+                <div style={styles.paymentBtns}>
+                  {paymentMethods.map((pm) => (
+                    <button
+                      key={pm.value}
+                      type="button"
+                      onClick={() => setPaymentMethod(pm.value)}
+                      style={{
+                        ...styles.paymentBtn,
+                        background: paymentMethod === pm.value ? "#4f46e5" : "#f8fafc",
+                        color: paymentMethod === pm.value ? "#fff" : "#64748b",
+                        border: paymentMethod === pm.value ? "1.5px solid #4f46e5" : "1.5px solid #e2e8f0",
+                      }}
+                    >
+                      {pm.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Monto recibido (solo efectivo) */}
+              {paymentMethod === "efectivo" && (
+                <div style={styles.field}>
+                  <label style={styles.label}>Monto recibido (RD$)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={received}
+                    onChange={(e) => setReceived(e.target.value)}
+                    placeholder="0.00"
+                    style={styles.input}
+                  />
+                  {Number(received) > 0 && (
+                    <div style={{
+                      ...styles.changePill,
+                      background: getChange() >= 0 ? "#ecfdf5" : "#fef2f2",
+                      color: getChange() >= 0 ? "#059669" : "#dc2626",
+                    }}>
+                      {getChange() >= 0
+                        ? `Cambio: $${getChange().toLocaleString("es-DO")}`
+                        : `Faltan: $${Math.abs(getChange()).toLocaleString("es-DO")}`}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Referencia (solo transferencia) */}
+              {paymentMethod === "transferencia" && (
+                <div style={styles.field}>
+                  <label style={styles.label}>Número de referencia</label>
+                  <input
+                    type="text"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    placeholder="Ej: TRF-000123"
+                    style={styles.input}
+                  />
+                </div>
+              )}
 
               <div style={styles.modalBtns}>
                 <button type="button" onClick={closeModal} style={styles.cancelBtn}>
@@ -284,28 +384,21 @@ const styles = {
   subtitle: { fontSize: 15, color: "#64748b", margin: 0 },
   headerBtns: { display: "flex", gap: 12 },
   exportBtn: {
-    padding: "10px 20px", background: "#fff",
-    color: "#4f46e5", border: "1.5px solid #4f46e5",
-    borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+    padding: "10px 20px", background: "#fff", color: "#4f46e5",
+    border: "1.5px solid #4f46e5", borderRadius: 10, fontSize: 14,
+    fontWeight: 600, cursor: "pointer",
   },
   createBtn: {
     padding: "10px 20px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
     color: "#fff", border: "none", borderRadius: 10, fontSize: 14,
     fontWeight: 600, cursor: "pointer",
   },
-  filtersRow: {
-    display: "flex", alignItems: "center",
-    gap: 16, marginBottom: 20, flexWrap: "wrap",
-  },
+  filtersRow: { display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" },
   filterBtns: { display: "flex", gap: 8 },
-  filterBtn: {
-    padding: "8px 16px", borderRadius: 8,
-    fontSize: 13, fontWeight: 600, cursor: "pointer",
-  },
+  filterBtn: { padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   totalPill: {
-    padding: "8px 16px", background: "#ecfdf5",
-    color: "#059669", borderRadius: 8, fontSize: 13,
-    border: "1px solid #a7f3d0",
+    padding: "8px 16px", background: "#ecfdf5", color: "#059669",
+    borderRadius: 8, fontSize: 13, border: "1px solid #a7f3d0",
   },
   msg: { color: "#64748b", fontSize: 15 },
   tableCard: {
@@ -320,6 +413,7 @@ const styles = {
   },
   tr: { borderBottom: "1px solid #f8fafc" },
   td: { padding: "14px 20px", fontSize: 14, color: "#334155" },
+  methodBadge: { padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 },
   empty: { textAlign: "center", padding: "40px", color: "#94a3b8", fontSize: 14 },
   overlay: {
     position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
@@ -357,6 +451,21 @@ const styles = {
   },
   totalLabel: { fontSize: 14, color: "#64748b", fontWeight: 500 },
   totalValue: { fontSize: 22, fontWeight: 700, color: "#059669" },
+  field: { display: "flex", flexDirection: "column", gap: 8 },
+  label: { fontSize: 13, fontWeight: 600, color: "#374151" },
+  paymentBtns: { display: "flex", gap: 8, flexWrap: "wrap" },
+  paymentBtn: {
+    padding: "10px 16px", borderRadius: 10, fontSize: 13,
+    fontWeight: 600, cursor: "pointer", transition: "all 0.2s",
+  },
+  input: {
+    padding: "11px 14px", border: "1.5px solid #e2e8f0",
+    borderRadius: 10, fontSize: 14, outline: "none", color: "#0f172a",
+  },
+  changePill: {
+    padding: "8px 14px", borderRadius: 8, fontSize: 13,
+    fontWeight: 600, textAlign: "center",
+  },
   modalBtns: { display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 4 },
   cancelBtn: {
     padding: "10px 20px", background: "transparent", border: "1.5px solid #e2e8f0",
