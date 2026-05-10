@@ -137,12 +137,9 @@ export function useExportPDF() {
     doc.setFontSize(10);
     doc.setTextColor(51, 65, 85);
     doc.text(sale.client_name || "Consumidor Final", 14, clientY + 16);
-    if (sale.client_rnc) {
-      doc.text(`RNC: ${sale.client_rnc}`, 14, clientY + 23);
-    }
 
     // Tabla de productos
-    const tableStartY = (sale.client_rnc ? clientY + 30 : clientY + 24);
+    const tableStartY = clientY + 24;
     const items = Array.isArray(sale.items) ? sale.items : [];
 
     autoTable(doc, {
