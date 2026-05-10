@@ -53,11 +53,18 @@ export default function Dashboard() {
       bg: "#ecfdf5",
     },
     {
+      label: "ITBIS cobrado",
+      value: data.total_itbis ? `$${Number(data.total_itbis).toLocaleString("es-DO")}` : "$0",
+      icon: "🧾",
+      color: "#dc2626",
+      bg: "#fef2f2",
+    },
+    {
       label: "Productos bajo stock",
       value: data.low_stock_products,
       icon: "⚠️",
-      color: "#dc2626",
-      bg: "#fef2f2",
+      color: "#f59e0b",
+      bg: "#fffbeb",
     },
   ];
 

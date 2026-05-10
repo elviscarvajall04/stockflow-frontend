@@ -77,7 +77,19 @@ export const clientsAPI = {
     request(`/clients/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   delete: (id) =>
     request(`/clients/${id}`, { method: "DELETE" }),
+};
 
+// COMPANY
+export const companyAPI = {
+  get: () => request("/company"),
+  update: (payload) =>
+    request("/company", { method: "PUT", body: JSON.stringify(payload) }),
+};
 
+// NCF
+export const ncfAPI = {
+  getAll: () => request("/ncf"),
+  update: (id, payload) =>
+    request(`/ncf/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
 };
 

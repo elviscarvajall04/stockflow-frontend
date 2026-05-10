@@ -20,6 +20,7 @@ export default function Navbar() {
     { label: "Ventas", path: "/sales", show: true },
     { label: "Clientes", path: "/clients", show: true },
     { label: "Usuarios", path: "/users", show: isAdmin },
+    { label: "Configuración", path: "/settings", show: isAdmin },
   ];
 
   const handleNav = (path) => {

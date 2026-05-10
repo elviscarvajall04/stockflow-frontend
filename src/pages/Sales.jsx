@@ -17,7 +17,7 @@ export default function Sales() {
   const [received, setReceived] = useState("");
   const [reference, setReference] = useState("");
   const [clientId, setClientId] = useState("");
-  const { exportSales } = useExportPDF();
+  const { exportSales, exportInvoice } = useExportPDF();
 
   const loadData = () => {
     setLoading(true);
@@ -59,13 +59,25 @@ export default function Sales() {
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const getTotal = () => {
+  const getSubtotal = () => {
     return items.reduce((sum, item) => {
       const product = products.find((p) => p.id === Number(item.product_id));
       if (!product) return sum;
-      return sum + product.price * item.quantity;
+      return sum + Number(product.price) * Number(item.quantity);
     }, 0);
   };
+
+  const getItbisTotal = () => {
+    return items.reduce((sum, item) => {
+      const product = products.find((p) => p.id === Number(item.product_id));
+      if (!product) return sum;
+      const itbisRate = Number(product.itbis || 18);
+      const itemSubtotal = Number(product.price) * Number(item.quantity);
+      return sum + itemSubtotal * (itbisRate / 100);
+    }, 0);
+  };
+
+  const getTotal = () => getSubtotal() + getItbisTotal();
 
   const getChange = () => {
     const total = getTotal();
@@ -127,6 +139,16 @@ export default function Sales() {
 
   const filtered = filterSales(sales);
   const filterTotal = filtered.reduce((sum, s) => sum + Number(s.total), 0);
+
+  const handleInvoice = async (saleId) => {
+    try {
+      const data = await salesAPI.getById(saleId);
+      exportInvoice(data, data.company);
+      toast.success("Factura generada correctamente");
+    } catch (err) {
+      toast.error(err.message || "Error generando factura");
+    }
+  };
 
   const handleExport = () => {
     if (filtered.length === 0) {
@@ -202,24 +224,32 @@ export default function Sales() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  {["ID", "Vendedor", "Cliente", "Total", "Método de pago", "Fecha"].map((h) => (
+                  {["NCF", "Vendedor", "Cliente", "Subtotal", "ITBIS", "Total", "Método", "Fecha", ""].map((h) => (
                     <th key={h} style={styles.th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                  {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={styles.empty}>
+                    <td colSpan={9} style={styles.empty}>
                       No hay ventas en este período.
                     </td>
                   </tr>
                 ) : (
                   filtered.map((s) => (
                     <tr key={s.sale_id ?? s.id} style={styles.tr}>
-                      <td style={styles.td}>#{s.sale_id ?? s.id ?? "—"}</td>
+                      <td style={{ ...styles.td, fontFamily: "monospace", fontSize: 12 }}>
+                        {s.ncf || `#${s.sale_id ?? s.id}`}
+                      </td>
                       <td style={styles.td}>{s.user_name}</td>
                       <td style={styles.td}>{s.client_name || "—"}</td>
+                      <td style={styles.td}>
+                        ${Number(s.subtotal || s.total).toLocaleString("es-DO")}
+                      </td>
+                      <td style={{ ...styles.td, color: "#dc2626" }}>
+                        ${Number(s.itbis_total || 0).toLocaleString("es-DO")}
+                      </td>
                       <td style={{ ...styles.td, fontWeight: 600, color: "#059669" }}>
                         ${Number(s.total).toLocaleString("es-DO")}
                       </td>
@@ -241,6 +271,15 @@ export default function Sales() {
                         {new Date(s.created_at).toLocaleDateString("es-DO", {
                           day: "2-digit", month: "short", year: "numeric",
                         })}
+                      </td>
+                      <td style={styles.td}>
+                        <button
+                          onClick={() => handleInvoice(s.sale_id ?? s.id)}
+                          style={styles.invoiceBtn}
+                          title="Descargar factura"
+                        >
+                          🧾
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -309,12 +348,28 @@ export default function Sales() {
                 + Agregar producto
               </button>
 
-              {/* Total */}
+              {/* Total con ITBIS */}
               <div style={styles.totalBox}>
-                <span style={styles.totalLabel}>Total</span>
-                <span style={styles.totalValue}>
-                  ${getTotal().toLocaleString("es-DO")}
-                </span>
+                <div>
+                  <div style={styles.totalRow}>
+                    <span style={styles.totalLabel}>Subtotal</span>
+                    <span style={styles.totalSubValue}>
+                      ${getSubtotal().toLocaleString("es-DO")}
+                    </span>
+                  </div>
+                  <div style={styles.totalRow}>
+                    <span style={styles.totalLabel}>ITBIS (18%)</span>
+                    <span style={styles.totalSubValue}>
+                      ${getItbisTotal().toLocaleString("es-DO")}
+                    </span>
+                  </div>
+                  <div style={{ ...styles.totalRow, marginTop: 6, paddingTop: 6, borderTop: "1px solid #e2e8f0" }}>
+                    <span style={{ ...styles.totalLabel, fontWeight: 700, color: "#0f172a" }}>Total</span>
+                    <span style={styles.totalValue}>
+                      ${getTotal().toLocaleString("es-DO")}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Método de pago */}
@@ -437,6 +492,11 @@ const styles = {
   tr: { borderBottom: "1px solid #f8fafc" },
   td: { padding: "14px 20px", fontSize: 14, color: "#334155" },
   methodBadge: { padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 },
+  invoiceBtn: {
+    background: "#eef2ff", border: "none", borderRadius: 8,
+    padding: "6px 10px", cursor: "pointer", fontSize: 16,
+    transition: "all 0.2s",
+  },
   empty: { textAlign: "center", padding: "40px", color: "#94a3b8", fontSize: 14 },
   overlay: {
     position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
@@ -470,11 +530,14 @@ const styles = {
     cursor: "pointer", textAlign: "center",
   },
   totalBox: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
     background: "#f8fafc", borderRadius: 10, padding: "14px 16px",
     border: "1px solid #e2e8f0",
   },
+  totalRow: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+  },
   totalLabel: { fontSize: 14, color: "#64748b", fontWeight: 500 },
+  totalSubValue: { fontSize: 16, fontWeight: 600, color: "#334155" },
   totalValue: { fontSize: 22, fontWeight: 700, color: "#059669" },
   paymentBtns: { display: "flex", gap: 8, flexWrap: "wrap" },
   paymentBtn: {

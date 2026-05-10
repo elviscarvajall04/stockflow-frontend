@@ -14,7 +14,7 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", price: "", stock: "" });
+  const [form, setForm] = useState({ name: "", price: "", stock: "", itbis: "18.00" });
   const [formLoading, setFormLoading] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -30,13 +30,13 @@ export default function Products() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", price: "", stock: "" });
+    setForm({ name: "", price: "", stock: "", itbis: "18.00" });
     setShowModal(true);
   };
 
   const openEdit = (product) => {
     setEditing(product);
-    setForm({ name: product.name, price: product.price, stock: product.stock });
+    setForm({ name: product.name, price: product.price, stock: product.stock, itbis: product.itbis ?? "18.00" });
     setShowModal(true);
   };
 
@@ -57,6 +57,7 @@ export default function Products() {
       name: form.name,
       price: Number(form.price),
       stock: Number(form.stock),
+      itbis: Number(form.itbis),
     };
 
     try {
@@ -144,15 +145,15 @@ export default function Products() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  {["ID", "Nombre", "Precio", "Stock", "Estado", isAdmin ? "Acciones" : ""].map((h) => (
+                  {["ID", "Nombre", "Precio", "ITBIS", "Stock", "Estado", isAdmin ? "Acciones" : ""].map((h) => (
                     <th key={h} style={styles.th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                  {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={styles.empty}>
+                    <td colSpan={7} style={styles.empty}>
                       {search ? `No se encontraron productos con "${search}"` : "No hay productos registrados."}
                     </td>
                   </tr>
@@ -162,6 +163,7 @@ export default function Products() {
                       <td style={styles.td}>#{p.id}</td>
                       <td style={{ ...styles.td, fontWeight: 600, color: "#0f172a" }}>{p.name}</td>
                       <td style={styles.td}>${Number(p.price).toLocaleString("es-DO")}</td>
+                      <td style={styles.td}>{Number(p.itbis || 18).toFixed(1)}%</td>
                       <td style={styles.td}>{p.stock}</td>
                       <td style={styles.td}>
                         <span style={{
@@ -238,6 +240,20 @@ export default function Products() {
                   required
                   style={styles.input}
                 />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>ITBIS (%)</label>
+                <select
+                  name="itbis"
+                  value={form.itbis}
+                  onChange={handleChange}
+                  style={styles.input}
+                >
+                  <option value="18.00">18% — General</option>
+                  <option value="0.00">0% — Exento</option>
+                  <option value="16.00">16% — Reducido</option>
+                </select>
               </div>
 
               <div style={styles.modalBtns}>

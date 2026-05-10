@@ -7,6 +7,7 @@ import Products from "./pages/Products";
 import Sales from "./pages/Sales";
 import Users from "./pages/Users";
 import Clients from "./pages/Clients";
+import Settings from "./pages/Settings";
 
 function PrivateRoute({ children }) {
   const { token, loading } = useAuth();
@@ -105,6 +106,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <Users />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <AdminRoute>
+                <Settings />
               </AdminRoute>
             }
           />
