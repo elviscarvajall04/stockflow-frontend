@@ -18,6 +18,7 @@ export default function Sales() {
   const [reference, setReference] = useState("");
   const [clientId, setClientId] = useState("");
   const { exportSales, exportInvoice } = useExportPDF();
+  const [invoicePreview, setInvoicePreview] = useState(null);
 
   const loadData = () => {
     setLoading(true);
@@ -143,11 +144,24 @@ export default function Sales() {
   const handleInvoice = async (saleId) => {
     try {
       const data = await salesAPI.getById(saleId);
-      exportInvoice(data, data.company);
-      toast.success("Factura generada correctamente");
+      setInvoicePreview(data);
     } catch (err) {
-      toast.error(err.message || "Error generando factura");
+      toast.error(err.message || "Error cargando factura");
     }
+  };
+
+  const closeInvoicePreview = () => setInvoicePreview(null);
+
+  const downloadInvoice = () => {
+    if (!invoicePreview) return;
+    exportInvoice(invoicePreview, invoicePreview.company);
+    toast.success("PDF descargado correctamente");
+  };
+
+  const methodLabels = {
+    efectivo: "Efectivo",
+    tarjeta: "Tarjeta",
+    transferencia: "Transferencia",
   };
 
   const handleExport = () => {
@@ -450,6 +464,129 @@ export default function Sales() {
           </div>
         </div>
       )}
+
+      {/* Modal preview factura */}
+      {invoicePreview && (
+        <div style={styles.overlay} onClick={closeInvoicePreview}>
+          <div style={styles.invoiceModal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.invoiceHeader}>
+              <h2 style={styles.invoiceTitle}>Previsualización de Factura</h2>
+              <button onClick={closeInvoicePreview} style={styles.invoiceCloseBtn}>✕</button>
+            </div>
+
+            <div style={styles.invoicePaper}>
+              {/* Empresa */}
+              <div style={styles.invCompany}>
+                <div>
+                  <h3 style={styles.invCompanyName}>
+                    {invoicePreview.company?.company_name || "StockFlow RD"}
+                  </h3>
+                  {invoicePreview.company?.rnc && (
+                    <p style={styles.invSmall}>RNC: {invoicePreview.company.rnc}</p>
+                  )}
+                  {invoicePreview.company?.phone && (
+                    <p style={styles.invSmall}>Tel: {invoicePreview.company.phone}</p>
+                  )}
+                  {invoicePreview.company?.address && (
+                    <p style={styles.invSmall}>{invoicePreview.company.address}</p>
+                  )}
+                </div>
+                <div style={styles.invFiscalBox}>
+                  <h3 style={styles.invFiscalTitle}>FACTURA</h3>
+                  <p style={styles.invNcf}>{invoicePreview.ncf}</p>
+                  <p style={styles.invSmall}>
+                    {new Date(invoicePreview.created_at).toLocaleDateString("es-DO", {
+                      day: "2-digit", month: "long", year: "numeric",
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Cliente */}
+              <div style={styles.invDivider} />
+              <div style={styles.invClient}>
+                <p style={styles.invClientLabel}>Cliente:</p>
+                <p style={styles.invClientName}>
+                  {invoicePreview.client_name || "Consumidor Final"}
+                </p>
+              </div>
+
+              {/* Tabla productos */}
+              <div style={styles.invDivider} />
+              <table style={styles.invTable}>
+                <thead>
+                  <tr>
+                    <th style={styles.invTh}>Producto</th>
+                    <th style={styles.invThRight}>Cant.</th>
+                    <th style={styles.invThRight}>Precio</th>
+                    <th style={styles.invThRight}>ITBIS</th>
+                    <th style={styles.invThRight}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(invoicePreview.items || []).map((item, i) => {
+                    const qty = Number(item.quantity) || 1;
+                    const price = Number(item.price) || 0;
+                    const itbisRate = Number(item.itbis_rate || 18);
+                    const itemSubtotal = price * qty;
+                    const itemItbis = itemSubtotal * (itbisRate / 100);
+                    return (
+                      <tr key={i}>
+                        <td style={styles.invTd}>{item.product_name}</td>
+                        <td style={styles.invTdRight}>{qty}</td>
+                        <td style={styles.invTdRight}>${price.toLocaleString("es-DO")}</td>
+                        <td style={{ ...styles.invTdRight, color: "#dc2626" }}>
+                          ${itemItbis.toLocaleString("es-DO")}
+                        </td>
+                        <td style={{ ...styles.invTdRight, fontWeight: 600 }}>
+                          ${(itemSubtotal + itemItbis).toLocaleString("es-DO")}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Totales */}
+              <div style={styles.invTotals}>
+                <div style={styles.invTotalRow}>
+                  <span>Subtotal</span>
+                  <span>${Number(invoicePreview.subtotal || 0).toLocaleString("es-DO")}</span>
+                </div>
+                <div style={{ ...styles.invTotalRow, color: "#dc2626" }}>
+                  <span>ITBIS</span>
+                  <span>${Number(invoicePreview.itbis_total || 0).toLocaleString("es-DO")}</span>
+                </div>
+                <div style={styles.invDivider} />
+                <div style={{ ...styles.invTotalRow, fontWeight: 700, fontSize: 16, color: "#059669" }}>
+                  <span>Total</span>
+                  <span>${Number(invoicePreview.total || 0).toLocaleString("es-DO")}</span>
+                </div>
+              </div>
+
+              {/* Método de pago */}
+              <p style={styles.invMethod}>
+                Método de pago: {methodLabels[invoicePreview.payment_method] || invoicePreview.payment_method}
+              </p>
+              <p style={styles.invNcfType}>
+                NCF Tipo: {invoicePreview.ncf_type || "B02"} —{" "}
+                {invoicePreview.ncf_type === "B01"
+                  ? "Factura de Crédito Fiscal"
+                  : "Factura de Consumo"}
+              </p>
+            </div>
+
+            <div style={styles.invoiceActions}>
+              <button onClick={closeInvoicePreview} style={styles.cancelBtn}>
+                Cerrar
+              </button>
+              <button onClick={downloadInvoice} style={styles.saveBtn}>
+                ⬇ Descargar PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -562,4 +699,65 @@ const styles = {
     color: "#fff", border: "none", borderRadius: 10, fontSize: 14,
     fontWeight: 600, cursor: "pointer",
   },
+  invoiceModal: {
+    background: "#fff", borderRadius: 20, padding: "24px",
+    width: "100%", maxWidth: 680, boxShadow: "0 8px 40px rgba(0,0,0,0.15)",
+    maxHeight: "90vh", display: "flex", flexDirection: "column",
+  },
+  invoiceHeader: {
+    display: "flex", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 16,
+  },
+  invoiceTitle: { fontSize: 18, fontWeight: 700, color: "#0f172a", margin: 0 },
+  invoiceCloseBtn: {
+    background: "none", border: "none", fontSize: 20,
+    color: "#94a3b8", cursor: "pointer", padding: "4px",
+  },
+  invoicePaper: {
+    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+    padding: "28px", flex: 1, overflowY: "auto", marginBottom: 16,
+  },
+  invCompany: {
+    display: "flex", justifyContent: "space-between",
+    alignItems: "flex-start", marginBottom: 20,
+  },
+  invCompanyName: { fontSize: 18, fontWeight: 700, color: "#4f46e5", margin: "0 0 6px" },
+  invSmall: { fontSize: 12, color: "#64748b", margin: "2px 0" },
+  invFiscalBox: { textAlign: "right" },
+  invFiscalTitle: { fontSize: 20, fontWeight: 700, color: "#0f172a", margin: "0 0 4px" },
+  invNcf: {
+    fontSize: 14, fontWeight: 600, color: "#4f46e5",
+    fontFamily: "monospace", margin: "0 0 4px",
+  },
+  invDivider: { height: 1, background: "#e2e8f0", margin: "12px 0" },
+  invClient: { marginBottom: 8 },
+  invClientLabel: { fontSize: 12, color: "#64748b", margin: "0 0 2px" },
+  invClientName: { fontSize: 14, fontWeight: 600, color: "#0f172a", margin: 0 },
+  invTable: { width: "100%", borderCollapse: "collapse", marginTop: 8 },
+  invTh: {
+    textAlign: "left", fontSize: 11, fontWeight: 600, color: "#64748b",
+    textTransform: "uppercase", padding: "8px 6px",
+    borderBottom: "2px solid #e2e8f0",
+  },
+  invThRight: {
+    textAlign: "right", fontSize: 11, fontWeight: 600, color: "#64748b",
+    textTransform: "uppercase", padding: "8px 6px",
+    borderBottom: "2px solid #e2e8f0",
+  },
+  invTd: { padding: "10px 6px", fontSize: 13, color: "#0f172a", borderBottom: "1px solid #f1f5f9" },
+  invTdRight: {
+    padding: "10px 6px", fontSize: 13, color: "#334155",
+    borderBottom: "1px solid #f1f5f9", textAlign: "right",
+  },
+  invTotals: {
+    marginTop: 16, marginLeft: "auto", width: 240,
+    display: "flex", flexDirection: "column", gap: 6,
+  },
+  invTotalRow: {
+    display: "flex", justifyContent: "space-between",
+    fontSize: 14, color: "#334155",
+  },
+  invMethod: { fontSize: 12, color: "#94a3b8", marginTop: 16, marginBottom: 2 },
+  invNcfType: { fontSize: 11, color: "#cbd5e1", margin: 0 },
+  invoiceActions: { display: "flex", gap: 12, justifyContent: "flex-end" },
 };
