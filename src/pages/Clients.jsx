@@ -17,6 +17,7 @@ export default function Clients() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "" });
   const [formLoading, setFormLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const loadClients = () => {
     setLoading(true);
@@ -89,11 +90,20 @@ export default function Clients() {
     }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`¿Eliminar a "${name}"?`)) return;
+  const confirmDelete = (client) => {
+    setDeleteTarget(client);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const { id, name, sales_count } = deleteTarget;
     try {
-      await clientsAPI.delete(id);
+      const data = await clientsAPI.delete(id);
       toast.success(`"${name}" eliminado correctamente`);
+      if (data.affected_sales > 0) {
+        toast(`${data.affected_sales} venta(s) fueron desvinculadas.`, { icon: "ℹ️" });
+      }
+      setDeleteTarget(null);
       loadClients();
     } catch (err) {
       toast.error(err.message || "Error eliminando cliente");
@@ -178,7 +188,7 @@ export default function Clients() {
                             <button onClick={() => openEdit(c)} style={styles.editBtn}>
                               Editar
                             </button>
-                            <button onClick={() => handleDelete(c.id, c.name)} style={styles.deleteBtn}>
+                            <button onClick={() => confirmDelete(c)} style={styles.deleteBtn}>
                               Eliminar
                             </button>
                           </>
@@ -335,6 +345,35 @@ export default function Clients() {
           </div>
         </div>
       )}
+
+      {/* Modal confirmar eliminación */}
+      {deleteTarget && (
+        <div style={styles.overlay} onClick={() => setDeleteTarget(null)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Eliminar cliente</h2>
+
+            <p style={styles.deleteText}>
+              ¿Estás seguro de eliminar a <strong>{deleteTarget.name}</strong>?
+            </p>
+
+            {deleteTarget.sales_count > 0 && (
+              <div style={styles.deleteWarning}>
+                ⚠️ Este cliente tiene <strong>{deleteTarget.sales_count} venta(s)</strong> registrada(s).
+                Al eliminarlo, las ventas se conservarán pero quedarán sin cliente asociado.
+              </div>
+            )}
+
+            <div style={styles.modalBtns}>
+              <button onClick={() => setDeleteTarget(null)} style={styles.cancelBtn}>
+                Cancelar
+              </button>
+              <button onClick={handleDelete} style={styles.deleteConfirmBtn}>
+                Eliminar de todas formas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -438,4 +477,14 @@ const styles = {
   detailLabel: { fontSize: 13, color: "#64748b", fontWeight: 500 },
   detailValue: { fontSize: 14, color: "#0f172a", wordBreak: "break-word", overflowWrap: "break-word", width: "100%", lineHeight: 1.5 },
   historyTitle: { fontSize: 16, fontWeight: 700, color: "#0f172a", margin: "0 0 16px" },
+  deleteText: { fontSize: 15, color: "#334155", marginBottom: 16, lineHeight: 1.6 },
+  deleteWarning: {
+    background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10,
+    padding: "14px 16px", fontSize: 14, color: "#92400e", lineHeight: 1.6,
+    marginBottom: 20,
+  },
+  deleteConfirmBtn: {
+    padding: "10px 20px", background: "#dc2626", color: "#fff",
+    border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+  },
 };
