@@ -19,6 +19,9 @@ export default function Sales() {
   const [clientId, setClientId] = useState("");
   const { exportSales, exportInvoice } = useExportPDF();
   const [invoicePreview, setInvoicePreview] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm, setEditForm] = useState({ client_id: "", payment_method: "" });
 
   const loadData = () => {
     setLoading(true);
@@ -164,6 +167,42 @@ export default function Sales() {
     transferencia: "Transferencia",
   };
 
+  const handleCancel = async () => {
+    if (!cancelTarget) return;
+    try {
+      await salesAPI.cancel(cancelTarget.sale_id ?? cancelTarget.id);
+      toast.success("Venta anulada correctamente. Stock restaurado.");
+      setCancelTarget(null);
+      loadData();
+    } catch (err) {
+      toast.error(err.message || "Error anulando venta");
+    }
+  };
+
+  const openEdit = (sale) => {
+    setEditTarget(sale);
+    setEditForm({
+      client_id: "",
+      payment_method: sale.payment_method || "efectivo",
+    });
+  };
+
+  const handleEdit = async (e) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    try {
+      await salesAPI.update(editTarget.sale_id ?? editTarget.id, {
+        client_id: editForm.client_id ? Number(editForm.client_id) : null,
+        payment_method: editForm.payment_method,
+      });
+      toast.success("Venta actualizada correctamente");
+      setEditTarget(null);
+      loadData();
+    } catch (err) {
+      toast.error(err.message || "Error actualizando venta");
+    }
+  };
+
   const handleExport = () => {
     if (filtered.length === 0) {
       toast.error("No hay ventas para exportar");
@@ -238,7 +277,7 @@ export default function Sales() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  {["NCF", "Vendedor", "Cliente", "Subtotal", "ITBIS", "Total", "Método", "Fecha", ""].map((h) => (
+                  {["NCF", "Vendedor", "Cliente", "Subtotal", "ITBIS", "Total", "Método", "Fecha", "Acciones"].map((h) => (
                     <th key={h} style={styles.th}>{h}</th>
                   ))}
                 </tr>
@@ -246,7 +285,7 @@ export default function Sales() {
               <tbody>
                   {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={styles.empty}>
+                    <td colSpan={10} style={styles.empty}>
                       No hay ventas en este período.
                     </td>
                   </tr>
@@ -287,13 +326,40 @@ export default function Sales() {
                         })}
                       </td>
                       <td style={styles.td}>
-                        <button
-                          onClick={() => handleInvoice(s.sale_id ?? s.id)}
-                          style={styles.invoiceBtn}
-                          title="Descargar factura"
-                        >
-                          🧾
-                        </button>
+                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          {s.canceled ? (
+                            <span style={{
+                              padding: "3px 8px", background: "#fef2f2", color: "#dc2626",
+                              borderRadius: 6, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
+                            }}>
+                              Anulada
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => openEdit(s)}
+                                style={styles.actionBtn}
+                                title="Editar venta"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={() => setCancelTarget(s)}
+                                style={styles.dangerBtn}
+                                title="Anular venta"
+                              >
+                                🚫
+                              </button>
+                              <button
+                                onClick={() => handleInvoice(s.sale_id ?? s.id)}
+                                style={styles.actionBtn}
+                                title="Ver factura"
+                              >
+                                🧾
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -587,6 +653,91 @@ export default function Sales() {
           </div>
         </div>
       )}
+
+      {/* Modal confirmar anulación */}
+      {cancelTarget && (
+        <div style={styles.overlay} onClick={() => setCancelTarget(null)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Anular venta</h2>
+            <p style={{ fontSize: 15, color: "#334155", marginBottom: 16, lineHeight: 1.6 }}>
+              ¿Estás seguro de anular la venta <strong>#{cancelTarget.sale_id ?? cancelTarget.id}</strong>?
+            </p>
+            <div style={{
+              background: "#fffbeb", border: "1px solid #fde68a",
+              borderRadius: 10, padding: "14px 16px", fontSize: 14, color: "#92400e",
+              lineHeight: 1.6, marginBottom: 20,
+            }}>
+              ⚠️ El stock de todos los productos será restaurado automáticamente.
+              Esta acción no se puede deshacer.
+            </div>
+            <div style={styles.modalBtns}>
+              <button onClick={() => setCancelTarget(null)} style={styles.cancelBtn}>
+                Cancelar
+              </button>
+              <button onClick={handleCancel} style={{
+                padding: "10px 20px", background: "#dc2626", color: "#fff",
+                border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+              }}>
+                Sí, anular venta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar venta */}
+      {editTarget && (
+        <div style={styles.overlay} onClick={() => setEditTarget(null)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Editar venta #{editTarget.sale_id ?? editTarget.id}</h2>
+            <form onSubmit={handleEdit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <div style={styles.field}>
+                <label style={styles.label}>Cliente</label>
+                <select
+                  value={editForm.client_id}
+                  onChange={(e) => setEditForm({ ...editForm, client_id: e.target.value })}
+                  style={styles.select}
+                >
+                  <option value="">Sin cliente</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>Método de pago</label>
+                <div style={styles.paymentBtns}>
+                  {paymentMethods.map((pm) => (
+                    <button
+                      key={pm.value}
+                      type="button"
+                      onClick={() => setEditForm({ ...editForm, payment_method: pm.value })}
+                      style={{
+                        ...styles.paymentBtn,
+                        background: editForm.payment_method === pm.value ? "#4f46e5" : "#f8fafc",
+                        color: editForm.payment_method === pm.value ? "#fff" : "#64748b",
+                        border: editForm.payment_method === pm.value ? "1.5px solid #4f46e5" : "1.5px solid #e2e8f0",
+                      }}
+                    >
+                      {pm.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={styles.modalBtns}>
+                <button type="button" onClick={() => setEditTarget(null)} style={styles.cancelBtn}>
+                  Cancelar
+                </button>
+                <button type="submit" style={styles.saveBtn}>
+                  Guardar cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -633,6 +784,14 @@ const styles = {
     background: "#eef2ff", border: "none", borderRadius: 8,
     padding: "6px 10px", cursor: "pointer", fontSize: 16,
     transition: "all 0.2s",
+  },
+  actionBtn: {
+    background: "#eef2ff", border: "none", borderRadius: 8,
+    padding: "6px 8px", cursor: "pointer", fontSize: 14,
+  },
+  dangerBtn: {
+    background: "#fef2f2", border: "none", borderRadius: 8,
+    padding: "6px 8px", cursor: "pointer", fontSize: 14,
   },
   empty: { textAlign: "center", padding: "40px", color: "#94a3b8", fontSize: 14 },
   overlay: {
