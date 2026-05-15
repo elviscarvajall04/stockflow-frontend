@@ -8,6 +8,8 @@ import Sales from "./pages/Sales";
 import Users from "./pages/Users";
 import Clients from "./pages/Clients";
 import Settings from "./pages/Settings";
+import Suppliers from "./pages/Suppliers";
+import Purchases from "./pages/Purchases";
 
 function PrivateRoute({ children }) {
   const { token, loading } = useAuth();
@@ -115,6 +117,22 @@ export default function App() {
               <AdminRoute>
                 <Settings />
               </AdminRoute>
+            }
+          />
+          <Route
+            path="/suppliers"
+            element={
+              <PrivateRoute>
+                <Suppliers />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/purchases"
+            element={
+              <PrivateRoute>
+                <Purchases />
+              </PrivateRoute>
             }
           />
           <Route path="*" element={<Navigate to="/login" replace />} />

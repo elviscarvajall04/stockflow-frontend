@@ -1,0 +1,292 @@
+import { useState, useEffect } from "react";
+import { purchasesAPI, productsAPI, suppliersAPI } from "../services/api";
+import Navbar from "../components/Navbar";
+import toast from "react-hot-toast";
+
+export default function Purchases() {
+  const [purchases, setPurchases] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [supplierId, setSupplierId] = useState("");
+  const [ncf, setNcf] = useState("");
+  const [notes, setNotes] = useState("");
+  const [items, setItems] = useState([{ product_id: "", quantity: 1, cost_price: "" }]);
+
+  const loadData = () => {
+    setLoading(true);
+    Promise.all([purchasesAPI.getAll(), productsAPI.getAll(), suppliersAPI.getAll()])
+      .then(([pData, prData, sData]) => {
+        setPurchases(Array.isArray(pData) ? pData : []);
+        setProducts(Array.isArray(prData) ? prData : []);
+        setSuppliers(Array.isArray(sData) ? sData : []);
+      })
+      .catch(() => toast.error("Error cargando datos"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const openModal = () => {
+    setSupplierId("");
+    setNcf("");
+    setNotes("");
+    setItems([{ product_id: "", quantity: 1, cost_price: "" }]);
+    setShowModal(true);
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const updated = [...items];
+    updated[index][field] = value;
+    setItems(updated);
+  };
+
+  const addItem = () => setItems([...items, { product_id: "", quantity: 1, cost_price: "" }]);
+  const removeItem = (index) => { if (items.length > 1) setItems(items.filter((_, i) => i !== index)); };
+
+  const getTotal = () => items.reduce((sum, item) => {
+    return sum + (Number(item.cost_price || 0) * Number(item.quantity || 0));
+  }, 0);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const validItems = items.filter((i) => i.product_id && i.quantity > 0 && i.cost_price > 0);
+    if (!supplierId) { toast.error("Selecciona un proveedor"); return; }
+    if (validItems.length === 0) { toast.error("Agrega al menos un producto válido"); return; }
+    setFormLoading(true);
+    try {
+      await purchasesAPI.create({
+        supplier_id: Number(supplierId),
+        user_id: JSON.parse(localStorage.getItem("user"))?.id,
+        items: validItems.map((i) => ({
+          product_id: Number(i.product_id),
+          quantity: Number(i.quantity),
+          cost_price: Number(i.cost_price),
+        })),
+        ncf,
+        notes,
+      });
+      toast.success("Compra registrada. Stock actualizado.");
+      setShowModal(false);
+      loadData();
+    } catch (err) {
+      toast.error(err.message || "Error registrando compra");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const totalCost = purchases.reduce((sum, p) => sum + Number(p.total), 0);
+
+  return (
+    <div style={styles.page}>
+      <Navbar />
+      <div style={styles.content}>
+        <div style={styles.header}>
+          <div>
+            <h1 style={styles.title}>Compras</h1>
+            <p style={styles.subtitle}>Registro de compras a proveedores</p>
+          </div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{
+              padding: "8px 16px", background: "#ecfdf5", color: "#059669",
+              borderRadius: 8, fontSize: 14, border: "1px solid #a7f3d0",
+            }}>
+              Total invertido: <strong>${totalCost.toLocaleString("es-DO")}</strong>
+            </div>
+            <button onClick={openModal} style={styles.createBtn}>+ Nueva compra</button>
+          </div>
+        </div>
+
+        {loading && <p style={styles.msg}>Cargando compras...</p>}
+
+        {!loading && (
+          <div style={styles.tableCard}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  {["ID", "Proveedor", "Productos", "Total", "NCF", "Fecha", "Registrado por"].map((h) => (
+                    <th key={h} style={styles.th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {purchases.length === 0 ? (
+                  <tr><td colSpan={7} style={styles.empty}>No hay compras registradas.</td></tr>
+                ) : (
+                  purchases.map((p) => (
+                    <tr key={p.purchase_id} style={styles.tr}>
+                      <td style={styles.td}>#{p.purchase_id}</td>
+                      <td style={{ ...styles.td, fontWeight: 600, color: "#0f172a" }}>{p.supplier_name}</td>
+                      <td style={styles.td}>{Array.isArray(p.items) ? p.items.length : 0} producto(s)</td>
+                      <td style={{ ...styles.td, fontWeight: 600, color: "#059669" }}>
+                        ${Number(p.total).toLocaleString("es-DO")}
+                      </td>
+                      <td style={{ ...styles.td, fontFamily: "monospace", fontSize: 12 }}>{p.ncf || "—"}</td>
+                      <td style={styles.td}>
+                        {new Date(p.created_at).toLocaleDateString("es-DO", {
+                          day: "2-digit", month: "short", year: "numeric",
+                        })}
+                      </td>
+                      <td style={styles.td}>{p.user_name}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showModal && (
+        <div style={styles.overlay} onClick={() => setShowModal(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Nueva compra</h2>
+            <form onSubmit={handleSubmit} style={styles.form}>
+              <div style={styles.field}>
+                <label style={styles.label}>Proveedor *</label>
+                <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} required style={styles.select}>
+                  <option value="">Selecciona proveedor</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {items.map((item, index) => (
+                <div key={index} style={styles.itemRow}>
+                  <select
+                    value={item.product_id}
+                    onChange={(e) => handleItemChange(index, "product_id", e.target.value)}
+                    required style={styles.select}
+                  >
+                    <option value="">Producto</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} (stock: {p.stock})</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number" min="1" placeholder="Cant." value={item.quantity}
+                    onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
+                    required style={styles.qtyInput}
+                  />
+                  <input
+                    type="number" min="0" step="0.01" placeholder="Costo RD$" value={item.cost_price}
+                    onChange={(e) => handleItemChange(index, "cost_price", e.target.value)}
+                    required style={styles.costInput}
+                  />
+                  <button type="button" onClick={() => removeItem(index)} style={styles.removeBtn}>✕</button>
+                </div>
+              ))}
+              <button type="button" onClick={addItem} style={styles.addItemBtn}>+ Agregar producto</button>
+
+              <div style={styles.field}>
+                <label style={styles.label}>NCF del proveedor</label>
+                <input type="text" value={ncf} onChange={(e) => setNcf(e.target.value)} placeholder="Opcional" style={styles.input} />
+              </div>
+              <div style={styles.field}>
+                <label style={styles.label}>Notas</label>
+                <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" style={styles.input} />
+              </div>
+
+              <div style={styles.totalBox}>
+                <span style={{ fontSize: 14, color: "#64748b" }}>Total compra</span>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "#059669" }}>
+                  ${getTotal().toLocaleString("es-DO")}
+                </span>
+              </div>
+
+              <div style={styles.modalBtns}>
+                <button type="button" onClick={() => setShowModal(false)} style={styles.cancelBtn}>Cancelar</button>
+                <button type="submit" disabled={formLoading}
+                  style={{ ...styles.saveBtn, opacity: formLoading ? 0.7 : 1 }}>
+                  {formLoading ? "Registrando..." : "Registrar compra"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const styles = {
+  page: { minHeight: "100vh", background: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" },
+  content: { maxWidth: 1100, margin: "0 auto", padding: "32px 24px" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 },
+  title: { fontSize: 28, fontWeight: 700, color: "#0f172a", margin: "0 0 4px" },
+  subtitle: { fontSize: 15, color: "#64748b", margin: 0 },
+  createBtn: {
+    padding: "10px 20px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+    color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+  },
+  msg: { color: "#64748b", fontSize: 15 },
+  tableCard: {
+    background: "#fff", borderRadius: 16, overflow: "hidden",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f1f5f9",
+  },
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: {
+    textAlign: "left", fontSize: 12, fontWeight: 600, color: "#94a3b8",
+    textTransform: "uppercase", letterSpacing: "0.5px",
+    padding: "16px 20px", borderBottom: "1px solid #f1f5f9", background: "#fafafa",
+  },
+  tr: { borderBottom: "1px solid #f8fafc" },
+  td: { padding: "14px 20px", fontSize: 14, color: "#334155" },
+  empty: { textAlign: "center", padding: "40px", color: "#94a3b8", fontSize: 14 },
+  overlay: {
+    position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+    display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
+  },
+  modal: {
+    background: "#fff", borderRadius: 20, padding: "36px",
+    width: "100%", maxWidth: 600, boxShadow: "0 8px 40px rgba(0,0,0,0.15)",
+    maxHeight: "90vh", overflowY: "auto",
+  },
+  modalTitle: { fontSize: 20, fontWeight: 700, color: "#0f172a", margin: "0 0 24px" },
+  form: { display: "flex", flexDirection: "column", gap: 14 },
+  field: { display: "flex", flexDirection: "column", gap: 8 },
+  label: { fontSize: 13, fontWeight: 600, color: "#374151" },
+  select: {
+    flex: 1, padding: "10px 12px", border: "1.5px solid #e2e8f0",
+    borderRadius: 10, fontSize: 14, outline: "none", color: "#0f172a", background: "#fff",
+  },
+  itemRow: { display: "flex", gap: 8, alignItems: "center" },
+  qtyInput: {
+    width: 70, padding: "10px 12px", border: "1.5px solid #e2e8f0",
+    borderRadius: 10, fontSize: 14, outline: "none", color: "#0f172a", textAlign: "center",
+  },
+  costInput: {
+    width: 110, padding: "10px 12px", border: "1.5px solid #e2e8f0",
+    borderRadius: 10, fontSize: 14, outline: "none", color: "#0f172a",
+  },
+  removeBtn: {
+    width: 36, height: 36, background: "#fef2f2", color: "#dc2626",
+    border: "none", borderRadius: 8, fontSize: 16, cursor: "pointer", flexShrink: 0,
+  },
+  addItemBtn: {
+    padding: "9px 16px", background: "#f8fafc", border: "1.5px dashed #cbd5e1",
+    borderRadius: 10, fontSize: 13, fontWeight: 600, color: "#64748b",
+    cursor: "pointer", textAlign: "center",
+  },
+  totalBox: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    background: "#f8fafc", borderRadius: 10, padding: "14px 16px", border: "1px solid #e2e8f0",
+  },
+  input: {
+    padding: "11px 14px", border: "1.5px solid #e2e8f0",
+    borderRadius: 10, fontSize: 14, outline: "none", color: "#0f172a",
+  },
+  modalBtns: { display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 4 },
+  cancelBtn: {
+    padding: "10px 20px", background: "transparent", border: "1.5px solid #e2e8f0",
+    borderRadius: 10, fontSize: 14, fontWeight: 600, color: "#64748b", cursor: "pointer",
+  },
+  saveBtn: {
+    padding: "10px 24px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+    color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+  },
+};

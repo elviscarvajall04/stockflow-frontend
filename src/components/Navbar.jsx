@@ -18,6 +18,8 @@ export default function Navbar() {
     { label: "Dashboard", path: "/dashboard", show: true },
     { label: "Productos", path: "/products", show: true },
     { label: "Ventas", path: "/sales", show: true },
+    { label: "Compras", path: "/purchases", show: true },
+    { label: "Proveedores", path: "/suppliers", show: true },
     { label: "Clientes", path: "/clients", show: true },
     { label: "Usuarios", path: "/users", show: isAdmin },
     { label: "Configuración", path: "/settings", show: isAdmin },

@@ -97,3 +97,22 @@ export const ncfAPI = {
     request(`/ncf/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
 };
 
+// SUPPLIERS
+export const suppliersAPI = {
+  getAll: () => request("/suppliers"),
+  getById: (id) => request(`/suppliers/${id}`),
+  create: (payload) =>
+    request("/suppliers", { method: "POST", body: JSON.stringify(payload) }),
+  update: (id, payload) =>
+    request(`/suppliers/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  delete: (id) => request(`/suppliers/${id}`, { method: "DELETE" }),
+};
+
+// PURCHASES
+export const purchasesAPI = {
+  create: (payload) =>
+    request("/purchases", { method: "POST", body: JSON.stringify(payload) }),
+  getAll: () => request("/purchases"),
+  getById: (id) => request(`/purchases/${id}`),
+};
+
