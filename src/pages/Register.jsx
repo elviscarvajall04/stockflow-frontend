@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", role: "employee" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +27,7 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await authAPI.register({ name: form.name, email: form.email, password: form.password });
+      await authAPI.register({ name: form.name, email: form.email, password: form.password, role: form.role });
       toast.success("Cuenta creada correctamente. Inicia sesión.");
       navigate("/login");
     } catch (err) {
@@ -107,6 +107,20 @@ export default function Register() {
                 placeholder="Repite la contraseña" required style={styles.input}
                 onFocus={(e) => (e.target.style.borderColor = "#6366f1")}
                 onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")} />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Rol</label>
+              <select name="role" value={form.role} onChange={handleChange}
+                style={{
+                  ...styles.input,
+                  cursor: "pointer",
+                  appearance: "auto",
+                }}
+              >
+                <option value="employee">Empleado</option>
+                <option value="admin">Administrador</option>
+              </select>
             </div>
 
             {error && (
