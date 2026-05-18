@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
+import { productsAPI } from "../services/api";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -8,6 +9,13 @@ export default function Navbar() {
   const location = useLocation();
   const isAdmin = user?.role === "admin";
   const [menuOpen, setMenuOpen] = useState(false);
+  const [lowStockCount, setLowStockCount] = useState(0);
+
+  useEffect(() => {
+    productsAPI.getLowStock()
+      .then((data) => setLowStockCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => {});
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -54,6 +62,9 @@ export default function Navbar() {
               }}
             >
               {l.label}
+              {l.path === "/products" && lowStockCount > 0 && (
+                <span style={styles.badge}>{lowStockCount}</span>
+              )}
             </button>
           ))}
         </div>
@@ -121,6 +132,9 @@ export default function Navbar() {
               }}
             >
               {l.label}
+              {l.path === "/products" && lowStockCount > 0 && (
+                <span style={styles.mobileBadge}>{lowStockCount}</span>
+              )}
             </button>
           ))}
 
@@ -160,7 +174,17 @@ const styles = {
   link: {
     padding: "20px 10px", background: "transparent", border: "none",
     fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "color 0.2s",
-    whiteSpace: "nowrap", flexShrink: 0,
+    whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
+  },
+  badge: {
+    background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 700,
+    borderRadius: 10, padding: "1px 6px", minWidth: 18, textAlign: "center",
+    lineHeight: "16px",
+  },
+  mobileBadge: {
+    background: "#dc2626", color: "#fff", fontSize: 10, fontWeight: 700,
+    borderRadius: 10, padding: "1px 6px", minWidth: 18, textAlign: "center",
+    lineHeight: "16px", marginLeft: 8,
   },
   right: { display: "flex", alignItems: "center", gap: 12, flexShrink: 0 },
   userInfo: { display: "flex", alignItems: "center", gap: 8 },
