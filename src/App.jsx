@@ -1,24 +1,38 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import Sales from "./pages/Sales";
 import Users from "./pages/Users";
-import Clients from "./pages/Clients";
 import Settings from "./pages/Settings";
+import Clients from "./pages/Clients";
 import Suppliers from "./pages/Suppliers";
 import Purchases from "./pages/Purchases";
+import Onboarding from "./pages/Onboarding";
 import DgiiReport from "./pages/DgiiReport";
 import InventoryMovements from "./pages/InventoryMovements";
 import Profit from "./pages/Profit";
 
 function PrivateRoute({ children }) {
-  const { token, loading } = useAuth();
-  if (loading) return null;
-  return token ? children : <Navigate to="/login" replace />;
+  const { token, loading, companyConfigured, checkingCompany } = useAuth();
+  if (loading || checkingCompany) return null;
+  if (!token) return <Navigate to="/login" replace />;
+  if (!companyConfigured) return <Navigate to="/onboarding" replace />;
+  return children;
+}
+
+function OnboardingRoute({ children }) {
+  const { token, loading, companyConfigured, checkingCompany } = useAuth();
+  if (loading || checkingCompany) return null;
+  if (!token) return <Navigate to="/login" replace />;
+  if (companyConfigured) return <Navigate to="/dashboard" replace />;
+  return children;
 }
 
 function PublicRoute({ children }) {
@@ -65,6 +79,7 @@ export default function App() {
             },
           }}
         />
+        <ErrorBoundary>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route
@@ -83,6 +98,16 @@ export default function App() {
               </PublicRoute>
             }
           />
+          <Route
+            path="/onboarding"
+            element={
+              <OnboardingRoute>
+                <Onboarding />
+              </OnboardingRoute>
+            }
+          />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             path="/dashboard"
             element={
@@ -173,6 +198,7 @@ export default function App() {
           />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+        </ErrorBoundary>
       </BrowserRouter>
     </AuthProvider>
   );

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { reportsAPI, inventoryAPI } from "../services/api";
 import Navbar from "../components/Navbar";
+import { CardSkeleton } from "../components/Skeleton";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer
@@ -25,8 +26,17 @@ export default function Dashboard() {
   }, []);
 
   if (loading) return (
-    <div style={styles.centered}>
-      <p style={styles.loadingText}>Cargando dashboard...</p>
+    <div style={styles.page}>
+      <Navbar />
+      <div style={styles.content}>
+        <div style={styles.metrics}>
+          {[1, 2, 3, 4].map((i) => <CardSkeleton key={i} />)}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      </div>
     </div>
   );
 

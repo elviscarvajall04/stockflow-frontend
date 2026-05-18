@@ -2,7 +2,11 @@ import { useState, useEffect } from "react";
 import { purchasesAPI, productsAPI, suppliersAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
+import Pagination from "../components/Pagination";
+import { TableSkeleton } from "../components/Skeleton";
 import toast from "react-hot-toast";
+
+const PAGE_LIMIT = 50;
 
 export default function Purchases() {
   const { user } = useAuth();
@@ -21,12 +25,19 @@ export default function Purchases() {
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const loadData = () => {
+  const loadData = (p = 1) => {
     setLoading(true);
-    Promise.all([purchasesAPI.getAll(), productsAPI.getAll(), suppliersAPI.getAll()])
+    setPage(p);
+    Promise.all([purchasesAPI.getAll({ page: p, limit: PAGE_LIMIT }), productsAPI.getAll(), suppliersAPI.getAll()])
       .then(([pData, prData, sData]) => {
-        setPurchases(Array.isArray(pData) ? pData : []);
+        const list = pData.data || pData || [];
+        setPurchases(Array.isArray(list) ? list : []);
+        setTotal(pData.total || 0);
+        setTotalPages(pData.totalPages || 1);
         setProducts(Array.isArray(prData) ? prData : []);
         setSuppliers(Array.isArray(sData) ? sData : []);
       })
@@ -34,7 +45,7 @@ export default function Purchases() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(1); }, []);
 
   const openModal = () => {
     setEditTarget(null);
@@ -192,7 +203,7 @@ export default function Purchases() {
         toast.success("Compra registrada. Stock actualizado.");
       }
       setShowModal(false);
-      loadData();
+      loadData(page);
     } catch (err) {
       toast.error(err.message || "Error guardando compra");
     } finally {
@@ -206,7 +217,7 @@ export default function Purchases() {
       await purchasesAPI.delete(deleteTarget.purchase_id);
       toast.success("Compra eliminada y stock revertido");
       setDeleteTarget(null);
-      loadData();
+      loadData(page);
     } catch (err) {
       toast.error(err.message || "Error eliminando compra");
     }
@@ -243,7 +254,7 @@ export default function Purchases() {
           </div>
         </div>
 
-        {loading && <p style={styles.msg}>Cargando compras...</p>}
+        {loading && <TableSkeleton rows={5} cols={7} />}
 
         {!loading && (
           <div style={styles.tableCard}>
@@ -289,6 +300,7 @@ export default function Purchases() {
                 )}
               </tbody>
             </table>
+            <Pagination page={page} totalPages={totalPages} total={total} limit={PAGE_LIMIT} onChange={loadData} />
           </div>
         )}
       </div>

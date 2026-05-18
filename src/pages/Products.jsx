@@ -2,8 +2,12 @@ import { useState, useEffect } from "react";
 import { productsAPI, categoriesAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
+import Pagination from "../components/Pagination";
+import { TableSkeleton } from "../components/Skeleton";
 import toast from "react-hot-toast";
 import { useExportPDF } from "../hooks/usePDF";
+
+const PAGE_LIMIT = 50;
 
 export default function Products() {
   const { user } = useAuth();
@@ -12,6 +16,9 @@ export default function Products() {
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", price: "", stock: "", itbis: "18.00", category_id: "" });
@@ -20,18 +27,22 @@ export default function Products() {
   const [categories, setCategories] = useState([]);
   const [showCatModal, setShowCatModal] = useState(false);
 
-  const loadProducts = () => {
+  const loadProducts = (p = 1) => {
     setLoading(true);
-    Promise.all([productsAPI.getAll(), categoriesAPI.getAll()])
+    setPage(p);
+    Promise.all([productsAPI.getAll({ page: p, limit: PAGE_LIMIT }), categoriesAPI.getAll()])
       .then(([pData, cData]) => {
-        setProducts(pData);
+        const list = pData.data || pData || [];
+        setProducts(Array.isArray(list) ? list : []);
+        setTotal(pData.total || 0);
+        setTotalPages(pData.totalPages || 1);
         setCategories(Array.isArray(cData) ? cData : []);
       })
       .catch(() => toast.error("Error cargando datos"))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadProducts(); }, []);
+  useEffect(() => { loadProducts(1); }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -144,7 +155,7 @@ export default function Products() {
           )}
         </div>
 
-        {loading && <p style={styles.msg}>Cargando productos...</p>}
+        {loading && <TableSkeleton rows={6} cols={7} />}
 
         {!loading && (
           <div style={styles.tableCard}>
@@ -204,6 +215,7 @@ export default function Products() {
                 )}
               </tbody>
             </table>
+            <Pagination page={page} totalPages={totalPages} total={total} limit={PAGE_LIMIT} onChange={loadProducts} />
           </div>
         )}
       </div>

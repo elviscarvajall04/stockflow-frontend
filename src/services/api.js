@@ -4,6 +4,26 @@ function getToken() {
   return localStorage.getItem("token");
 }
 
+let refreshPromise = null;
+
+async function refreshToken() {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    localStorage.setItem("token", data.token);
+    return data.token;
+  } catch {
+    return null;
+  }
+}
+
 async function request(path, options = {}) {
   const token = getToken();
 
@@ -17,6 +37,30 @@ async function request(path, options = {}) {
     ...options,
     headers,
   });
+
+  if (res.status === 401 && token) {
+    if (!refreshPromise) {
+      refreshPromise = refreshToken();
+    }
+    const newToken = await refreshPromise;
+    refreshPromise = null;
+    if (newToken) {
+      headers.Authorization = `Bearer ${newToken}`;
+      const retryRes = await fetch(`${BASE_URL}${path}`, {
+        ...options,
+        headers,
+      });
+      const retryData = await retryRes.json();
+      if (!retryRes.ok) {
+        throw new Error(retryData.message || "Error en la solicitud");
+      }
+      return retryData;
+    }
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+    throw new Error("Sesión expirada");
+  }
 
   const data = await res.json();
 
@@ -39,11 +83,26 @@ export const authAPI = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  forgotPassword: (email) =>
+    request("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (token, password) =>
+    request("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }),
 };
+
+function qs(params) {
+  if (!params || Object.keys(params).length === 0) return "";
+  return "?" + new URLSearchParams(params).toString();
+}
 
 // PRODUCTS
 export const productsAPI = {
-  getAll: () => request("/products"),
+  getAll: (params = {}) => request(`/products${qs(params)}`),
   getById: (id) => request(`/products/${id}`),
   getLowStock: () => request("/products/low-stock"),
   create: (payload) =>
@@ -58,7 +117,7 @@ export const productsAPI = {
 export const salesAPI = {
   create: (payload) =>
     request("/sales", { method: "POST", body: JSON.stringify(payload) }),
-  getAll: () => request("/sales"),
+  getAll: (params = {}) => request(`/sales${qs(params)}`),
   getById: (id) => request(`/sales/${id}`),
   update: (id, payload) =>
     request(`/sales/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
@@ -77,7 +136,7 @@ export const reportsAPI = {
 
 // CLIENTS
 export const clientsAPI = {
-  getAll: () => request("/clients"),
+  getAll: (params = {}) => request(`/clients${qs(params)}`),
   getById: (id) => request(`/clients/${id}`),
   create: (payload) =>
     request("/clients", { method: "POST", body: JSON.stringify(payload) }),
@@ -103,7 +162,7 @@ export const ncfAPI = {
 
 // SUPPLIERS
 export const suppliersAPI = {
-  getAll: () => request("/suppliers"),
+  getAll: (params = {}) => request(`/suppliers${qs(params)}`),
   getById: (id) => request(`/suppliers/${id}`),
   create: (payload) =>
     request("/suppliers", { method: "POST", body: JSON.stringify(payload) }),
@@ -116,7 +175,7 @@ export const suppliersAPI = {
 export const purchasesAPI = {
   create: (payload) =>
     request("/purchases", { method: "POST", body: JSON.stringify(payload) }),
-  getAll: () => request("/purchases"),
+  getAll: (params = {}) => request(`/purchases${qs(params)}`),
   getById: (id) => request(`/purchases/${id}`),
   update: (id, payload) =>
     request(`/purchases/${id}`, { method: "PUT", body: JSON.stringify(payload) }),

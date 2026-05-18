@@ -125,6 +125,12 @@ export default function Login() {
           </form>
 
           <p style={styles.hint}>
+            <span style={styles.link} onClick={() => navigate("/forgot-password")}>
+              ¿Olvidaste tu contraseña?
+            </span>
+          </p>
+
+          <p style={styles.hint}>
             ¿No tienes cuenta?{" "}
             <span style={styles.link} onClick={() => navigate("/register")}>
               Regístrate

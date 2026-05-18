@@ -2,7 +2,11 @@ import { useState, useEffect } from "react";
 import { clientsAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
+import Pagination from "../components/Pagination";
+import { TableSkeleton } from "../components/Skeleton";
 import toast from "react-hot-toast";
+
+const PAGE_LIMIT = 50;
 
 export default function Clients() {
   const { user } = useAuth();
@@ -18,16 +22,25 @@ export default function Clients() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", client_type: "final" });
   const [formLoading, setFormLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const loadClients = () => {
+  const loadClients = (p = 1) => {
     setLoading(true);
-    clientsAPI.getAll()
-      .then(setClients)
+    setPage(p);
+    clientsAPI.getAll({ page: p, limit: PAGE_LIMIT })
+      .then((data) => {
+        const list = data.data || data || [];
+        setClients(Array.isArray(list) ? list : []);
+        setTotal(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+      })
       .catch(() => toast.error("Error cargando clientes"))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadClients(); }, []);
+  useEffect(() => { loadClients(1); }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -83,7 +96,7 @@ export default function Clients() {
         toast.success("Cliente creado correctamente");
       }
       closeModal();
-      loadClients();
+      loadClients(page);
     } catch (err) {
       toast.error(err.message || "Error guardando cliente");
     } finally {
@@ -105,7 +118,7 @@ export default function Clients() {
         toast(`${data.affected_sales} venta(s) fueron desvinculadas.`, { icon: "ℹ️" });
       }
       setDeleteTarget(null);
-      loadClients();
+      loadClients(page);
     } catch (err) {
       toast.error(err.message || "Error eliminando cliente");
     }
@@ -149,7 +162,7 @@ export default function Clients() {
           )}
         </div>
 
-        {loading && <p style={styles.msg}>Cargando clientes...</p>}
+        {loading && <TableSkeleton rows={5} cols={7} />}
 
         {!loading && (
           <div style={styles.tableCard}>
@@ -209,6 +222,7 @@ export default function Clients() {
                 )}
               </tbody>
             </table>
+            <Pagination page={page} totalPages={totalPages} total={total} limit={PAGE_LIMIT} onChange={loadClients} />
           </div>
         )}
       </div>

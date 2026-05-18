@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { usersAPI, authAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
+import { TableSkeleton } from "../components/Skeleton";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -91,7 +92,7 @@ export default function Users() {
           <button onClick={openCreate} style={styles.createBtn}>+ Nuevo usuario</button>
         </div>
 
-        {loading && <p style={styles.msg}>Cargando usuarios...</p>}
+        {loading && <TableSkeleton rows={5} cols={5} />}
 
         {!loading && (
           <div style={styles.tableCard}>

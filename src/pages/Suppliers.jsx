@@ -2,7 +2,11 @@ import { useState, useEffect } from "react";
 import { suppliersAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
+import Pagination from "../components/Pagination";
+import { TableSkeleton } from "../components/Skeleton";
 import toast from "react-hot-toast";
+
+const PAGE_LIMIT = 50;
 
 export default function Suppliers() {
   const { user } = useAuth();
@@ -19,16 +23,25 @@ export default function Suppliers() {
   const [detailData, setDetailData] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const loadSuppliers = () => {
+  const loadSuppliers = (p = 1) => {
     setLoading(true);
-    suppliersAPI.getAll()
-      .then(setSuppliers)
+    setPage(p);
+    suppliersAPI.getAll({ page: p, limit: PAGE_LIMIT })
+      .then((data) => {
+        const list = data.data || data || [];
+        setSuppliers(Array.isArray(list) ? list : []);
+        setTotal(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+      })
       .catch(() => toast.error("Error cargando proveedores"))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadSuppliers(); }, []);
+  useEffect(() => { loadSuppliers(1); }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -56,7 +69,7 @@ export default function Suppliers() {
         toast.success("Proveedor creado");
       }
       setShowModal(false);
-      loadSuppliers();
+      loadSuppliers(page);
     } catch (err) {
       toast.error(err.message || "Error guardando proveedor");
     } finally {
@@ -70,7 +83,7 @@ export default function Suppliers() {
       await suppliersAPI.delete(deleteTarget.id);
       toast.success(`"${deleteTarget.name}" eliminado`);
       setDeleteTarget(null);
-      loadSuppliers();
+      loadSuppliers(page);
     } catch (err) {
       toast.error(err.message || "Error eliminando proveedor");
     }
@@ -117,7 +130,7 @@ export default function Suppliers() {
           {search && <button onClick={() => setSearch("")} style={styles.clearBtn}>✕</button>}
         </div>
 
-        {loading && <p style={styles.msg}>Cargando proveedores...</p>}
+        {loading && <TableSkeleton rows={5} cols={6} />}
 
         {!loading && (
           <div style={styles.tableCard}>
@@ -154,6 +167,7 @@ export default function Suppliers() {
                 )}
               </tbody>
             </table>
+            <Pagination page={page} totalPages={totalPages} total={total} limit={PAGE_LIMIT} onChange={loadSuppliers} />
           </div>
         )}
       </div>

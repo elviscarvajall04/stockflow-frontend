@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { inventoryAPI, productsAPI } from "../services/api";
 import Navbar from "../components/Navbar";
+import { TableSkeleton } from "../components/Skeleton";
 import toast from "react-hot-toast";
 
 export default function InventoryMovements() {
@@ -97,7 +98,7 @@ export default function InventoryMovements() {
         {/* Tabla */}
         <div style={styles.tableCard}>
           {loading ? (
-            <p style={styles.msg}>Cargando movimientos...</p>
+            <TableSkeleton rows={6} cols={6} />
           ) : movements.length === 0 ? (
             <p style={styles.empty}>No hay movimientos registrados.</p>
           ) : (

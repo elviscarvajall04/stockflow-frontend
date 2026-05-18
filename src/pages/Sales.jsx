@@ -1,18 +1,26 @@
 import { useState, useEffect } from "react";
 import { salesAPI, productsAPI, clientsAPI } from "../services/api";
 import Navbar from "../components/Navbar";
+import Pagination from "../components/Pagination";
+import { TableSkeleton } from "../components/Skeleton";
 import toast from "react-hot-toast";
 import { useExportPDF } from "../hooks/usePDF";
+
+const PAGE_LIMIT = 50;
 
 export default function Sales() {
   const [sales, setSales] = useState([]);
   const [products, setProducts] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [items, setItems] = useState([{ product_id: "", quantity: 1 }]);
   const [formLoading, setFormLoading] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [showCanceled, setShowCanceled] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("efectivo");
   const [received, setReceived] = useState("");
@@ -26,19 +34,23 @@ export default function Sales() {
   const [editForm, setEditForm] = useState({ client_id: "", payment_method: "" });
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-  const loadData = () => {
+  const loadData = (p = 1) => {
     setLoading(true);
-    Promise.all([salesAPI.getAll(), productsAPI.getAll(), clientsAPI.getAll()])
+    setPage(p);
+    Promise.all([salesAPI.getAll({ page: p, limit: PAGE_LIMIT }), productsAPI.getAll(), clientsAPI.getAll()])
       .then(([salesData, productsData, clientsData]) => {
-        setSales(Array.isArray(salesData) ? salesData : []);
-        setProducts(Array.isArray(productsData) ? productsData : []);
-        setClients(Array.isArray(clientsData) ? clientsData : []);
+        const list = salesData.data || salesData || [];
+        setSales(Array.isArray(list) ? list : []);
+        setTotal(salesData.total || 0);
+        setTotalPages(salesData.totalPages || 1);
+        setProducts(Array.isArray(productsData.data || productsData) ? (productsData.data || productsData) : []);
+        setClients(Array.isArray(clientsData.data || clientsData) ? (clientsData.data || clientsData) : []);
       })
       .catch(() => toast.error("Error cargando datos"))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(1); }, []);
 
   const openModal = () => {
     setItems([{ product_id: "", quantity: 1 }]);
@@ -133,7 +145,7 @@ export default function Sales() {
       });
       toast.success("Venta registrada correctamente");
       closeModal();
-      loadData();
+      loadData(page);
     } catch (err) {
       toast.error(err.message || "Error registrando venta");
     } finally {
@@ -157,6 +169,12 @@ export default function Sales() {
           date.getFullYear() === now.getFullYear();
       }
       return true;
+    }).filter((s) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (s.ncf && s.ncf.toLowerCase().includes(q)) ||
+        (s.client_name && s.client_name.toLowerCase().includes(q)) ||
+        (s.user_name && s.user_name.toLowerCase().includes(q));
     });
   };
 
@@ -192,7 +210,7 @@ export default function Sales() {
       await salesAPI.cancel(cancelTarget.sale_id ?? cancelTarget.id);
       toast.success("Venta anulada correctamente. Stock restaurado.");
       setCancelTarget(null);
-      loadData();
+      loadData(page);
     } catch (err) {
       toast.error(err.message || "Error anulando venta");
     }
@@ -214,7 +232,7 @@ export default function Sales() {
       await salesAPI.delete(deleteTarget.sale_id ?? deleteTarget.id);
       toast.success("Venta eliminada permanentemente");
       setDeleteTarget(null);
-      loadData();
+      loadData(page);
     } catch (err) {
       toast.error(err.message || "Error eliminando venta");
     }
@@ -238,7 +256,7 @@ export default function Sales() {
       });
       toast.success("Venta actualizada correctamente");
       setEditTarget(null);
-      loadData();
+      loadData(page);
     } catch (err) {
       toast.error(err.message || "Error actualizando venta");
     }
@@ -315,6 +333,23 @@ export default function Sales() {
               {showCanceled ? "Ocultar anuladas" : `Mostrar anuladas (${sales.filter(s => s.canceled).length})`}
             </button>
           </div>
+          <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13 }}>🔍</span>
+            <input
+              type="text" placeholder="Buscar por NCF, cliente..."
+              value={search} onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "100%", padding: "8px 12px 8px 34px", border: "1.5px solid #e2e8f0",
+                borderRadius: 8, fontSize: 13, outline: "none", color: "#0f172a", background: "#fff",
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch("")} style={{
+                position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 12,
+              }}>✕</button>
+            )}
+          </div>
           {filter !== "all" && (
             <div style={styles.totalPill}>
               Total: <strong>${filterTotal.toLocaleString("es-DO")}</strong>
@@ -322,7 +357,7 @@ export default function Sales() {
           )}
         </div>
 
-        {loading && <p style={styles.msg}>Cargando ventas...</p>}
+        {loading && <TableSkeleton rows={8} cols={9} />}
 
         {!loading && (
           <div style={styles.tableCard}>
@@ -436,6 +471,7 @@ export default function Sales() {
                 )}
               </tbody>
             </table>
+            <Pagination page={page} totalPages={totalPages} total={total} limit={PAGE_LIMIT} onChange={loadData} />
           </div>
         )}
       </div>

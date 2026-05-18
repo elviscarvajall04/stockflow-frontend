@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { companyAPI, ncfAPI } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import toast from "react-hot-toast";
 
@@ -7,6 +8,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 const API_ORIGIN = API_BASE.replace("/api", "");
 
 export default function Settings() {
+  const { refreshCompanyStatus } = useAuth();
   const [form, setForm] = useState({
     company_name: "",
     commercial_name: "",
@@ -59,6 +61,7 @@ export default function Settings() {
         default_itbis: Number(form.default_itbis),
       });
       toast.success("Configuración guardada correctamente");
+      refreshCompanyStatus();
     } catch (err) {
       toast.error(err.message || "Error guardando configuración");
     } finally {
