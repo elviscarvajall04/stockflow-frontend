@@ -20,6 +20,7 @@ export default function Purchases() {
   const [items, setItems] = useState([{ product_id: "", quantity: 1, cost_price: "", applies_itbis: true, is_new: false, new_product_name: "", new_sale_price: "" }]);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [search, setSearch] = useState("");
 
   const loadData = () => {
     setLoading(true);
@@ -213,6 +214,12 @@ export default function Purchases() {
 
   const totalCost = purchases.reduce((sum, p) => sum + Number(p.total), 0);
 
+  const filtered = purchases.filter((p) =>
+    String(p.purchase_id).includes(search) ||
+    (p.supplier_name && p.supplier_name.toLowerCase().includes(search.toLowerCase())) ||
+    (p.ncf && p.ncf.toLowerCase().includes(search.toLowerCase()))
+  );
+
   return (
     <div style={styles.page}>
       <Navbar />
@@ -223,6 +230,9 @@ export default function Purchases() {
             <p style={styles.subtitle}>Registro de compras a proveedores</p>
           </div>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <input type="text" placeholder="Buscar compra..." value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={styles.searchInput} />
             <div style={{
               padding: "8px 16px", background: "#ecfdf5", color: "#059669",
               borderRadius: 8, fontSize: 14, border: "1px solid #a7f3d0",
@@ -246,10 +256,10 @@ export default function Purchases() {
                 </tr>
               </thead>
               <tbody>
-                {purchases.length === 0 ? (
-                  <tr><td colSpan={7} style={styles.empty}>No hay compras registradas.</td></tr>
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={7} style={styles.empty}>{search ? "Sin resultados." : "No hay compras registradas."}</td></tr>
                 ) : (
-                  purchases.map((p) => (
+                  filtered.map((p) => (
                     <tr key={p.purchase_id} style={styles.tr}>
                       <td style={styles.td}>#{p.purchase_id}</td>
                       <td style={{ ...styles.td, fontWeight: 600, color: "#0f172a" }}>{p.supplier_name}</td>
@@ -439,6 +449,10 @@ const styles = {
   totalBox: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
     background: "#f8fafc", borderRadius: 10, padding: "14px 16px", border: "1px solid #e2e8f0",
+  },
+  searchInput: {
+    padding: "10px 14px", border: "1.5px solid #e2e8f0", borderRadius: 10,
+    fontSize: 14, outline: "none", color: "#0f172a", width: 220,
   },
   input: {
     padding: "11px 14px", border: "1.5px solid #e2e8f0",
