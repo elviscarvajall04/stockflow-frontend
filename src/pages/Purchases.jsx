@@ -174,7 +174,6 @@ export default function Purchases() {
       } else {
         await purchasesAPI.create({
           supplier_id: Number(supplierId),
-          user_id: JSON.parse(localStorage.getItem("user"))?.id,
           items: validItems.map((i) => {
             const base = {
               quantity: Number(i.quantity),

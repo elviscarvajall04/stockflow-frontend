@@ -122,7 +122,6 @@ export default function Sales() {
     setFormLoading(true);
     try {
       await salesAPI.create({
-        user_id: JSON.parse(localStorage.getItem("user"))?.id,
         client_id: clientId ? Number(clientId) : null,
         items: validItems.map((i) => ({
           product_id: Number(i.product_id),
