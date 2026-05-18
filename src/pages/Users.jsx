@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { authAPI } from "../services/api";
+import { usersAPI, authAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import { useNavigate } from "react-router-dom";
@@ -8,37 +8,73 @@ import toast from "react-hot-toast";
 export default function Users() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [showModal, setShowModal] = useState(false);
+
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "employee" });
   const [formLoading, setFormLoading] = useState(false);
 
   useEffect(() => {
-    if (user?.role !== "admin") navigate("/dashboard");
+    if (user?.role !== "admin") { navigate("/dashboard"); return; }
+    loadUsers();
   }, [user]);
 
-  const openModal = () => {
+  const loadUsers = () => {
+    setLoading(true);
+    usersAPI.getAll()
+      .then(setUsers)
+      .catch(() => toast.error("Error cargando usuarios"))
+      .finally(() => setLoading(false));
+  };
+
+  const openCreate = () => {
+    setEditTarget(null);
     setForm({ name: "", email: "", password: "", role: "employee" });
-    setShowModal(true);
+    setShowCreateModal(true);
   };
 
-  const closeModal = () => setShowModal(false);
-
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const openEdit = (u) => {
+    setEditTarget(u);
+    setForm({ name: u.name, email: u.email, password: "", role: u.role });
+    setShowCreateModal(true);
   };
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormLoading(true);
-
     try {
-      await authAPI.register(form);
-      toast.success(`Usuario "${form.name}" creado correctamente`);
-      closeModal();
+      if (editTarget) {
+        const payload = { name: form.name, email: form.email, role: form.role };
+        if (form.password) payload.password = form.password;
+        await usersAPI.update(editTarget.id, payload);
+        toast.success("Usuario actualizado");
+      } else {
+        await authAPI.register(form);
+        toast.success("Usuario creado");
+      }
+      setShowCreateModal(false);
+      loadUsers();
     } catch (err) {
-      toast.error(err.message || "Error creando usuario");
+      toast.error(err.message || "Error guardando usuario");
     } finally {
       setFormLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await usersAPI.delete(deleteTarget.id);
+      toast.success("Usuario eliminado");
+      setDeleteTarget(null);
+      loadUsers();
+    } catch (err) {
+      toast.error(err.message || "Error eliminando usuario");
     }
   };
 
@@ -52,103 +88,115 @@ export default function Users() {
             <h1 style={styles.title}>Usuarios</h1>
             <p style={styles.subtitle}>Gestión de accesos al sistema</p>
           </div>
-          <button onClick={openModal} style={styles.createBtn}>
-            + Nuevo usuario
-          </button>
+          <button onClick={openCreate} style={styles.createBtn}>+ Nuevo usuario</button>
         </div>
 
-        <div style={styles.rolesGrid}>
-          <div style={styles.roleCard}>
-            <div style={styles.roleIcon}>👑</div>
-            <div>
-              <p style={styles.roleTitle}>Administrador</p>
-              <p style={styles.roleDesc}>
-                Acceso total. Puede crear, editar y eliminar productos, ver reportes y gestionar usuarios.
-              </p>
-            </div>
+        {loading && <p style={styles.msg}>Cargando usuarios...</p>}
+
+        {!loading && (
+          <div style={styles.tableCard}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  {["Nombre", "Email", "Rol", "Creado", "Acciones"].map((h) => (
+                    <th key={h} style={styles.th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {users.length === 0 ? (
+                  <tr><td colSpan={5} style={styles.empty}>No hay usuarios registrados.</td></tr>
+                ) : (
+                  users.map((u) => (
+                    <tr key={u.id} style={styles.tr}>
+                      <td style={{ ...styles.td, fontWeight: 600, color: "#0f172a" }}>{u.name}</td>
+                      <td style={styles.td}>{u.email}</td>
+                      <td style={styles.td}>
+                        <span style={{
+                          ...styles.roleBadge,
+                          background: u.role === "admin" ? "#eef2ff" : "#ecfeff",
+                          color: u.role === "admin" ? "#4f46e5" : "#0891b2",
+                        }}>
+                          {u.role === "admin" ? "Administrador" : "Empleado"}
+                        </span>
+                      </td>
+                      <td style={styles.td}>
+                        {new Date(u.created_at).toLocaleDateString("es-DO", {
+                          day: "2-digit", month: "short", year: "numeric",
+                        })}
+                      </td>
+                      <td style={styles.td}>
+                        <button onClick={() => openEdit(u)} style={styles.editBtn}>Editar</button>
+                        <button onClick={() => setDeleteTarget(u)} style={styles.deleteBtn}>Eliminar</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-          <div style={styles.roleCard}>
-            <div style={{ ...styles.roleIcon, background: "#ecfeff", color: "#0891b2" }}>👤</div>
-            <div>
-              <p style={styles.roleTitle}>Empleado</p>
-              <p style={styles.roleDesc}>
-                Puede ver productos y registrar ventas. No puede crear, editar ni eliminar productos.
-              </p>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
-      {showModal && (
-        <div style={styles.overlay} onClick={closeModal}>
+      {/* Modal crear / editar */}
+      {showCreateModal && (
+        <div style={styles.overlay} onClick={() => setShowCreateModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h2 style={styles.modalTitle}>Nuevo usuario</h2>
-
+            <h2 style={styles.modalTitle}>{editTarget ? "Editar usuario" : "Nuevo usuario"}</h2>
             <form onSubmit={handleSubmit} style={styles.form}>
               <div style={styles.field}>
                 <label style={styles.label}>Nombre</label>
-                <input
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  placeholder="Ej: María López"
-                  required
-                  style={styles.input}
-                />
+                <input name="name" value={form.name} onChange={handleChange} required style={styles.input} />
               </div>
-
               <div style={styles.field}>
                 <label style={styles.label}>Correo electrónico</label>
-                <input
-                  name="email"
-                  type="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  placeholder="maria@empresa.com"
-                  required
-                  style={styles.input}
-                />
+                <input name="email" type="email" value={form.email} onChange={handleChange} required style={styles.input} />
               </div>
-
               <div style={styles.field}>
-                <label style={styles.label}>Contraseña</label>
-                <input
-                  name="password"
-                  type="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  placeholder="Mínimo 6 caracteres"
-                  required
-                  style={styles.input}
-                />
+                <label style={styles.label}>{editTarget ? "Nueva contraseña (dejar vacío para mantener)" : "Contraseña"}</label>
+                <input name="password" type="password" value={form.password} onChange={handleChange}
+                  required={!editTarget} minLength={editTarget ? 0 : 6} style={styles.input} />
               </div>
-
               <div style={styles.field}>
                 <label style={styles.label}>Rol</label>
-                <select
-                  name="role"
-                  value={form.role}
-                  onChange={handleChange}
-                  style={styles.select}
-                >
+                <select name="role" value={form.role} onChange={handleChange} style={styles.select}>
                   <option value="employee">Empleado</option>
                   <option value="admin">Administrador</option>
                 </select>
               </div>
-
               <div style={styles.modalBtns}>
-                <button type="button" onClick={closeModal} style={styles.cancelBtn}>
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={formLoading}
-                  style={{ ...styles.saveBtn, opacity: formLoading ? 0.7 : 1 }}
-                >
-                  {formLoading ? "Creando..." : "Crear usuario"}
+                <button type="button" onClick={() => setShowCreateModal(false)} style={styles.cancelBtn}>Cancelar</button>
+                <button type="submit" disabled={formLoading} style={{ ...styles.saveBtn, opacity: formLoading ? 0.7 : 1 }}>
+                  {formLoading ? "Guardando..." : editTarget ? "Guardar cambios" : "Crear usuario"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmar eliminación */}
+      {deleteTarget && (
+        <div style={styles.overlay} onClick={() => setDeleteTarget(null)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Eliminar usuario</h2>
+            <p style={{ fontSize: 15, color: "#334155", marginBottom: 16, lineHeight: 1.6 }}>
+              ¿Estás seguro de eliminar a <strong>{deleteTarget.name}</strong>?
+            </p>
+            <div style={{
+              background: "#fef2f2", border: "1px solid #fca5a5",
+              borderRadius: 10, padding: "14px 16px", fontSize: 14, color: "#991b1b",
+              lineHeight: 1.6, marginBottom: 20,
+            }}>
+              🗑️ Se eliminará permanentemente. No se puede eliminar si tiene ventas o compras registradas.
+            </div>
+            <div style={styles.modalBtns}>
+              <button onClick={() => setDeleteTarget(null)} style={styles.cancelBtn}>Cancelar</button>
+              <button onClick={handleDelete} style={{
+                padding: "10px 20px", background: "#dc2626", color: "#fff",
+                border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+              }}>Sí, eliminar</button>
+            </div>
           </div>
         </div>
       )}
@@ -164,26 +212,33 @@ const styles = {
   subtitle: { fontSize: 15, color: "#64748b", margin: 0 },
   createBtn: {
     padding: "10px 20px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
-    color: "#fff", border: "none", borderRadius: 10, fontSize: 14,
-    fontWeight: 600, cursor: "pointer",
+    color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
   },
-  rolesGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 20, marginTop: 8,
-  },
-  roleCard: {
-    background: "#fff", borderRadius: 16, padding: "24px",
-    display: "flex", gap: 16, alignItems: "flex-start",
+  msg: { color: "#64748b", fontSize: 15 },
+  tableCard: {
+    background: "#fff", borderRadius: 16, overflow: "hidden",
     boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f1f5f9",
   },
-  roleIcon: {
-    width: 48, height: 48, borderRadius: 12,
-    background: "#eef2ff", color: "#4f46e5",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 22, flexShrink: 0,
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: {
+    textAlign: "left", fontSize: 12, fontWeight: 600, color: "#94a3b8",
+    textTransform: "uppercase", letterSpacing: "0.5px",
+    padding: "16px 20px", borderBottom: "1px solid #f1f5f9", background: "#fafafa",
   },
-  roleTitle: { fontSize: 15, fontWeight: 700, color: "#0f172a", margin: "0 0 6px" },
-  roleDesc: { fontSize: 13, color: "#64748b", lineHeight: 1.6, margin: 0 },
+  tr: { borderBottom: "1px solid #f8fafc" },
+  td: { padding: "14px 20px", fontSize: 14, color: "#334155" },
+  roleBadge: {
+    padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+  },
+  editBtn: {
+    padding: "6px 12px", background: "#eef2ff", color: "#4f46e5",
+    border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer", marginRight: 8,
+  },
+  deleteBtn: {
+    padding: "6px 12px", background: "#fef2f2", color: "#dc2626",
+    border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer",
+  },
+  empty: { textAlign: "center", padding: "40px", color: "#94a3b8", fontSize: 14 },
   overlay: {
     position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
     display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
@@ -211,7 +266,6 @@ const styles = {
   },
   saveBtn: {
     padding: "10px 24px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
-    color: "#fff", border: "none", borderRadius: 10, fontSize: 14,
-    fontWeight: 600, cursor: "pointer",
+    color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
   },
 };

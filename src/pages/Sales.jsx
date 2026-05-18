@@ -13,15 +13,18 @@ export default function Sales() {
   const [items, setItems] = useState([{ product_id: "", quantity: 1 }]);
   const [formLoading, setFormLoading] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [showCanceled, setShowCanceled] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("efectivo");
   const [received, setReceived] = useState("");
   const [reference, setReference] = useState("");
   const [clientId, setClientId] = useState("");
-  const { exportSales, exportInvoice } = useExportPDF();
+  const { exportSales, exportInvoice, exportCreditNote } = useExportPDF();
   const [invoicePreview, setInvoicePreview] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
   const [editForm, setEditForm] = useState({ client_id: "", payment_method: "" });
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   const loadData = () => {
     setLoading(true);
@@ -89,8 +92,24 @@ export default function Sales() {
     return rec - total;
   };
 
+  const getStockError = () => {
+    for (const item of items) {
+      if (!item.product_id || !item.quantity) continue;
+      const product = products.find((p) => p.id === Number(item.product_id));
+      if (product && Number(item.quantity) > product.stock) {
+        return `Stock insuficiente para "${product.name}": disponible ${product.stock}, solicitado ${item.quantity}`;
+      }
+    }
+    return null;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const stockError = getStockError();
+    if (stockError) {
+      toast.error(stockError);
+      return;
+    }
     const validItems = items.filter((i) => i.product_id && i.quantity > 0);
     if (validItems.length === 0) {
       toast.error("Agrega al menos un producto válido");
@@ -126,6 +145,7 @@ export default function Sales() {
   const filterSales = (sales) => {
     const now = new Date();
     return sales.filter((s) => {
+      if (!showCanceled && s.canceled) return false;
       const date = new Date(s.created_at);
       if (filter === "today") return date.toDateString() === now.toDateString();
       if (filter === "week") {
@@ -155,9 +175,9 @@ export default function Sales() {
 
   const closeInvoicePreview = () => setInvoicePreview(null);
 
-  const downloadInvoice = () => {
+  const downloadInvoice = async () => {
     if (!invoicePreview) return;
-    exportInvoice(invoicePreview, invoicePreview.company);
+    await exportInvoice(invoicePreview, invoicePreview.company);
     toast.success("PDF descargado correctamente");
   };
 
@@ -176,6 +196,28 @@ export default function Sales() {
       loadData();
     } catch (err) {
       toast.error(err.message || "Error anulando venta");
+    }
+  };
+
+  const downloadCreditNote = async (sale) => {
+    try {
+      const data = await salesAPI.getById(sale.sale_id ?? sale.id);
+      await exportCreditNote(data, data.company);
+      toast.success("Nota de crédito descargada");
+    } catch (err) {
+      toast.error(err.message || "Error descargando nota de crédito");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await salesAPI.delete(deleteTarget.sale_id ?? deleteTarget.id);
+      toast.success("Venta eliminada permanentemente");
+      setDeleteTarget(null);
+      loadData();
+    } catch (err) {
+      toast.error(err.message || "Error eliminando venta");
     }
   };
 
@@ -262,6 +304,17 @@ export default function Sales() {
                 {f.label}
               </button>
             ))}
+            <button
+              onClick={() => setShowCanceled(!showCanceled)}
+              style={{
+                ...styles.filterBtn,
+                background: showCanceled ? "#fef2f2" : "#fff",
+                color: showCanceled ? "#dc2626" : "#64748b",
+                border: showCanceled ? "1.5px solid #fca5a5" : "1.5px solid #e2e8f0",
+              }}
+            >
+              {showCanceled ? "Ocultar anuladas" : `Mostrar anuladas (${sales.filter(s => s.canceled).length})`}
+            </button>
           </div>
           {filter !== "all" && (
             <div style={styles.totalPill}>
@@ -328,12 +381,30 @@ export default function Sales() {
                       <td style={styles.td}>
                         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                           {s.canceled ? (
-                            <span style={{
-                              padding: "3px 8px", background: "#fef2f2", color: "#dc2626",
-                              borderRadius: 6, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
-                            }}>
-                              Anulada
-                            </span>
+                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <span style={{
+                                padding: "3px 8px", background: "#fef2f2", color: "#dc2626",
+                                borderRadius: 6, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
+                              }}>
+                                Anulada
+                              </span>
+                              <button
+                                onClick={() => downloadCreditNote(s)}
+                                style={styles.creditBtn}
+                                title="Descargar nota de crédito"
+                              >
+                                📄
+                              </button>
+                              {user.role === "admin" && (
+                                <button
+                                  onClick={() => setDeleteTarget(s)}
+                                  style={styles.dangerBtn}
+                                  title="Eliminar permanentemente"
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <>
                               <button
@@ -418,6 +489,15 @@ export default function Sales() {
                     style={styles.qtyInput}
                     placeholder="Cant."
                   />
+                  {(() => {
+                    const product = products.find((p) => p.id === Number(item.product_id));
+                    const overstock = product && Number(item.quantity) > product.stock;
+                    return overstock ? (
+                      <span style={{ fontSize: 11, color: "#dc2626", whiteSpace: "nowrap" }}>
+                        Stock: {product.stock}
+                      </span>
+                    ) : null;
+                  })()}
                   <button type="button" onClick={() => removeItem(index)} style={styles.removeBtn}>
                     ✕
                   </button>
@@ -685,6 +765,38 @@ export default function Sales() {
         </div>
       )}
 
+      {/* Modal confirmar eliminación de venta anulada */}
+      {deleteTarget && (
+        <div style={styles.overlay} onClick={() => setDeleteTarget(null)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Eliminar venta anulada</h2>
+            <p style={{ fontSize: 15, color: "#334155", marginBottom: 16, lineHeight: 1.6 }}>
+              ¿Estás seguro de eliminar permanentemente la venta <strong>#{deleteTarget.sale_id ?? deleteTarget.id}</strong>?
+            </p>
+            <div style={{
+              background: "#fef2f2", border: "1px solid #fca5a5",
+              borderRadius: 10, padding: "14px 16px", fontSize: 14, color: "#991b1b",
+              lineHeight: 1.6, marginBottom: 20,
+            }}>
+              🗑️ Esta venta ya estaba anulada y el stock fue restaurado.
+              Se eliminará definitivamente de la base de datos.
+              Esta acción no se puede deshacer.
+            </div>
+            <div style={styles.modalBtns}>
+              <button onClick={() => setDeleteTarget(null)} style={styles.cancelBtn}>
+                Cancelar
+              </button>
+              <button onClick={handleDelete} style={{
+                padding: "10px 20px", background: "#dc2626", color: "#fff",
+                border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+              }}>
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal editar venta */}
       {editTarget && (
         <div style={styles.overlay} onClick={() => setEditTarget(null)}>
@@ -791,6 +903,10 @@ const styles = {
   },
   dangerBtn: {
     background: "#fef2f2", border: "none", borderRadius: 8,
+    padding: "6px 8px", cursor: "pointer", fontSize: 14,
+  },
+  creditBtn: {
+    background: "#fff7ed", border: "none", borderRadius: 8,
     padding: "6px 8px", cursor: "pointer", fontSize: 14,
   },
   empty: { textAlign: "center", padding: "40px", color: "#94a3b8", fontSize: 14 },

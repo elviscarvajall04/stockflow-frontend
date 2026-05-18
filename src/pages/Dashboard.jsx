@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { reportsAPI } from "../services/api";
+import { reportsAPI, inventoryAPI } from "../services/api";
 import Navbar from "../components/Navbar";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
@@ -8,12 +8,18 @@ import {
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
+  const [inventoryValue, setInventoryValue] = useState(null);
+  const [profitData, setProfitData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    reportsAPI.getDashboard()
-      .then((res) => setData(res))
+    Promise.all([reportsAPI.getDashboard(), inventoryAPI.getValue(), reportsAPI.getProfitReport("1970-01-01", "2999-12-31")])
+      .then(([report, inv, profit]) => {
+        setData(report);
+        setInventoryValue(inv);
+        setProfitData(profit);
+      })
       .catch(() => setError("Error cargando el dashboard"))
       .finally(() => setLoading(false));
   }, []);
@@ -60,11 +66,25 @@ export default function Dashboard() {
       bg: "#fef2f2",
     },
     {
+      label: "Ganancia total",
+      value: profitData ? `$${Number(profitData.summary.total_profit).toLocaleString("es-DO")}` : "$0",
+      icon: "📈",
+      color: "#059669",
+      bg: "#ecfdf5",
+    },
+    {
       label: "Productos bajo stock",
       value: data.low_stock_products,
       icon: "⚠️",
       color: "#f59e0b",
       bg: "#fffbeb",
+    },
+    {
+      label: "Valor del inventario",
+      value: inventoryValue ? `$${Number(inventoryValue.total_value).toLocaleString("es-DO")}` : "$0",
+      icon: "📊",
+      color: "#0891b2",
+      bg: "#ecfeff",
     },
   ];
 

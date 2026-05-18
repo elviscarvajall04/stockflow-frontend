@@ -64,11 +64,15 @@ export const salesAPI = {
     request(`/sales/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   cancel: (id) =>
     request(`/sales/${id}/cancel`, { method: "PUT" }),
+  delete: (id) =>
+    request(`/sales/${id}`, { method: "DELETE" }),
 };
 
 // REPORTS
 export const reportsAPI = {
   getDashboard: () => request("/reports/dashboard"),
+  getDgiiReport: (month, year) => request(`/reports/dgii?month=${month}&year=${year}`),
+  getProfitReport: (from, to) => request(`/reports/profit?from=${from}&to=${to}`),
 };
 
 // CLIENTS
@@ -114,5 +118,39 @@ export const purchasesAPI = {
     request("/purchases", { method: "POST", body: JSON.stringify(payload) }),
   getAll: () => request("/purchases"),
   getById: (id) => request(`/purchases/${id}`),
+  update: (id, payload) =>
+    request(`/purchases/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  delete: (id) =>
+    request(`/purchases/${id}`, { method: "DELETE" }),
+};
+
+// USERS
+export const usersAPI = {
+  getAll: () => request("/users"),
+  getById: (id) => request(`/users/${id}`),
+  update: (id, payload) =>
+    request(`/users/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  delete: (id) =>
+    request(`/users/${id}`, { method: "DELETE" }),
+};
+
+// INVENTORY
+export const inventoryAPI = {
+  getMovements: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/inventory/movements${qs ? "?" + qs : ""}`);
+  },
+  getValue: () => request("/inventory/value"),
+};
+
+// CATEGORIES
+export const categoriesAPI = {
+  getAll: () => request("/categories"),
+  create: (payload) =>
+    request("/categories", { method: "POST", body: JSON.stringify(payload) }),
+  update: (id, payload) =>
+    request(`/categories/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  delete: (id) =>
+    request(`/categories/${id}`, { method: "DELETE" }),
 };
 

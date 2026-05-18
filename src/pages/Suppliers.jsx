@@ -15,6 +15,10 @@ export default function Suppliers() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", rnc: "", phone: "", email: "", address: "" });
   const [formLoading, setFormLoading] = useState(false);
+  const [detailTarget, setDetailTarget] = useState(null);
+  const [detailData, setDetailData] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const loadSuppliers = () => {
     setLoading(true);
@@ -60,14 +64,29 @@ export default function Suppliers() {
     }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`¿Eliminar proveedor "${name}"?`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await suppliersAPI.delete(id);
-      toast.success(`"${name}" eliminado`);
+      await suppliersAPI.delete(deleteTarget.id);
+      toast.success(`"${deleteTarget.name}" eliminado`);
+      setDeleteTarget(null);
       loadSuppliers();
     } catch (err) {
       toast.error(err.message || "Error eliminando proveedor");
+    }
+  };
+
+  const openDetail = async (supplier) => {
+    setDetailTarget(supplier);
+    setDetailData(null);
+    setDetailLoading(true);
+    try {
+      const data = await suppliersAPI.getById(supplier.id);
+      setDetailData(data);
+    } catch {
+      toast.error("Error cargando detalle del proveedor");
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -105,7 +124,7 @@ export default function Suppliers() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  {["Nombre", "RNC", "Teléfono", "Email", "Compras", isAdmin ? "Acciones" : ""].map((h) => (
+                  {["Nombre", "RNC", "Teléfono", "Email", "Compras", "Acciones"].map((h) => (
                     <th key={h} style={styles.th}>{h}</th>
                   ))}
                 </tr>
@@ -121,12 +140,15 @@ export default function Suppliers() {
                       <td style={styles.td}>{s.phone || "—"}</td>
                       <td style={styles.td}>{s.email || "—"}</td>
                       <td style={styles.td}>{s.purchase_count || 0}</td>
-                      {isAdmin && (
-                        <td style={styles.td}>
-                          <button onClick={() => openEdit(s)} style={styles.editBtn}>Editar</button>
-                          <button onClick={() => handleDelete(s.id, s.name)} style={styles.deleteBtn}>Eliminar</button>
-                        </td>
-                      )}
+                      <td style={styles.td}>
+                        <button onClick={() => openDetail(s)} style={styles.detailBtn}>Ver</button>
+                        {isAdmin && (
+                          <>
+                            <button onClick={() => openEdit(s)} style={styles.editBtn}>Editar</button>
+                            <button onClick={() => setDeleteTarget(s)} style={styles.deleteBtn}>Eliminar</button>
+                          </>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -168,6 +190,96 @@ export default function Suppliers() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmar eliminación */}
+      {deleteTarget && (
+        <div style={styles.overlay} onClick={() => setDeleteTarget(null)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>Eliminar proveedor</h2>
+            <p style={{ fontSize: 15, color: "#334155", marginBottom: 16, lineHeight: 1.6 }}>
+              ¿Estás seguro de eliminar a <strong>{deleteTarget.name}</strong>?
+            </p>
+            <div style={{
+              background: "#fef2f2", border: "1px solid #fca5a5",
+              borderRadius: 10, padding: "14px 16px", fontSize: 14, color: "#991b1b",
+              lineHeight: 1.6, marginBottom: 20,
+            }}>
+              🗑️ No se puede eliminar si tiene compras registradas.
+            </div>
+            <div style={styles.modalBtns}>
+              <button onClick={() => setDeleteTarget(null)} style={styles.cancelBtn}>Cancelar</button>
+              <button onClick={handleDelete} style={{
+                padding: "10px 20px", background: "#dc2626", color: "#fff",
+                border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+              }}>Sí, eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal detalle proveedor */}
+      {detailTarget && (
+        <div style={styles.overlay} onClick={() => { setDetailTarget(null); setDetailData(null); }}>
+          <div style={{ ...styles.modal, maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>{detailTarget.name}</h2>
+
+            {detailLoading ? (
+              <p style={{ color: "#64748b", fontSize: 14 }}>Cargando detalle...</p>
+            ) : detailData ? (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+                  <div><strong style={styles.detailLabel}>RNC</strong><p style={styles.detailValue}>{detailData.rnc || "—"}</p></div>
+                  <div><strong style={styles.detailLabel}>Teléfono</strong><p style={styles.detailValue}>{detailData.phone || "—"}</p></div>
+                  <div><strong style={styles.detailLabel}>Email</strong><p style={styles.detailValue}>{detailData.email || "—"}</p></div>
+                  <div><strong style={styles.detailLabel}>Dirección</strong><p style={styles.detailValue}>{detailData.address || "—"}</p></div>
+                </div>
+
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", margin: "0 0 4px" }}>
+                  Historial de compras
+                </h3>
+                <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 16px" }}>
+                  Total: <strong style={{ color: "#059669" }}>${Number(detailData.total_purchases || 0).toLocaleString("es-DO")}</strong>
+                </p>
+
+                {(!detailData.purchases || detailData.purchases.length === 0) ? (
+                  <p style={{ color: "#94a3b8", fontSize: 14, textAlign: "center", padding: 24 }}>No hay compras registradas.</p>
+                ) : (
+                  <table style={styles.nestedTable}>
+                    <thead>
+                      <tr>
+                        {["#", "Total", "NCF", "Fecha", "Registrado por"].map((h) => (
+                          <th key={h} style={styles.nestedTh}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailData.purchases.map((p) => (
+                        <tr key={p.id} style={styles.nestedTr}>
+                          <td style={styles.nestedTd}>#{p.id}</td>
+                          <td style={{ ...styles.nestedTd, fontWeight: 600, color: "#059669" }}>
+                            ${Number(p.total).toLocaleString("es-DO")}
+                          </td>
+                          <td style={{ ...styles.nestedTd, fontFamily: "monospace", fontSize: 12 }}>{p.ncf || "—"}</td>
+                          <td style={styles.nestedTd}>
+                            {new Date(p.created_at).toLocaleDateString("es-DO", {
+                              day: "2-digit", month: "short", year: "numeric",
+                            })}
+                          </td>
+                          <td style={styles.nestedTd}>{p.user_name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            ) : null}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+              <button onClick={() => { setDetailTarget(null); setDetailData(null); }} style={styles.cancelBtn}>Cerrar</button>
+            </div>
           </div>
         </div>
       )}
@@ -239,4 +351,18 @@ const styles = {
     padding: "10px 24px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
     color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
   },
+  detailBtn: {
+    padding: "6px 12px", background: "#f8fafc", color: "#475569",
+    border: "1.5px solid #e2e8f0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer", marginRight: 8,
+  },
+  detailLabel: { fontSize: 12, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" },
+  detailValue: { fontSize: 15, color: "#0f172a", margin: "4px 0 0", fontWeight: 500 },
+  nestedTable: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  nestedTh: {
+    textAlign: "left", fontSize: 11, fontWeight: 600, color: "#94a3b8",
+    textTransform: "uppercase", letterSpacing: "0.5px",
+    padding: "10px 12px", borderBottom: "1px solid #f1f5f9", background: "#fafafa",
+  },
+  nestedTr: { borderBottom: "1px solid #f8fafc" },
+  nestedTd: { padding: "10px 12px", fontSize: 13, color: "#334155" },
 };

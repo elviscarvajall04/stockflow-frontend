@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { productsAPI } from "../services/api";
+import { productsAPI, categoriesAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import toast from "react-hot-toast";
@@ -14,15 +14,20 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", price: "", stock: "", itbis: "18.00" });
+  const [form, setForm] = useState({ name: "", price: "", stock: "", itbis: "18.00", category_id: "" });
   const [formLoading, setFormLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [showCatModal, setShowCatModal] = useState(false);
 
   const loadProducts = () => {
     setLoading(true);
-    productsAPI.getAll()
-      .then(setProducts)
-      .catch(() => toast.error("Error cargando productos"))
+    Promise.all([productsAPI.getAll(), categoriesAPI.getAll()])
+      .then(([pData, cData]) => {
+        setProducts(pData);
+        setCategories(Array.isArray(cData) ? cData : []);
+      })
+      .catch(() => toast.error("Error cargando datos"))
       .finally(() => setLoading(false));
   };
 
@@ -30,13 +35,13 @@ export default function Products() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", price: "", stock: "", itbis: "18.00" });
+    setForm({ name: "", price: "", stock: "", itbis: "18.00", category_id: "" });
     setShowModal(true);
   };
 
   const openEdit = (product) => {
     setEditing(product);
-    setForm({ name: product.name, price: product.price, stock: product.stock, itbis: product.itbis ?? "18.00" });
+    setForm({ name: product.name, price: product.price, stock: product.stock, itbis: product.itbis ?? "18.00", category_id: product.category_id ?? "" });
     setShowModal(true);
   };
 
@@ -58,6 +63,7 @@ export default function Products() {
       price: Number(form.price),
       stock: Number(form.stock),
       itbis: Number(form.itbis),
+      category_id: form.category_id ? Number(form.category_id) : null,
     };
 
     try {
@@ -145,7 +151,7 @@ export default function Products() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  {["ID", "Nombre", "Precio", "ITBIS", "Stock", "Estado", isAdmin ? "Acciones" : ""].map((h) => (
+                  {["ID", "Nombre", "Categoría", "Precio", "ITBIS", "Stock", "Estado", isAdmin ? "Acciones" : ""].map((h) => (
                     <th key={h} style={styles.th}>{h}</th>
                   ))}
                 </tr>
@@ -162,6 +168,15 @@ export default function Products() {
                     <tr key={p.id} style={styles.tr}>
                       <td style={styles.td}>#{p.id}</td>
                       <td style={{ ...styles.td, fontWeight: 600, color: "#0f172a" }}>{p.name}</td>
+                      <td style={styles.td}>
+                        <span style={{
+                          ...styles.catBadge,
+                          background: p.category_name ? "#f1f5f9" : "transparent",
+                          color: p.category_name ? "#475569" : "#94a3b8",
+                        }}>
+                          {p.category_name || "Sin categoría"}
+                        </span>
+                      </td>
                       <td style={styles.td}>${Number(p.price).toLocaleString("es-DO")}</td>
                       <td style={styles.td}>{Number(p.itbis || 18).toFixed(1)}%</td>
                       <td style={styles.td}>{p.stock}</td>
@@ -211,6 +226,31 @@ export default function Products() {
                   required
                   style={styles.input}
                 />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>Categoría</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <select
+                    name="category_id"
+                    value={form.category_id}
+                    onChange={handleChange}
+                    style={{ ...styles.input, flex: 1 }}
+                  >
+                    <option value="">Sin categoría</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {isAdmin && (
+                    <button type="button" onClick={() => setShowCatModal(true)} style={{
+                      padding: "11px 14px", background: "#f8fafc", border: "1.5px solid #e2e8f0",
+                      borderRadius: 10, fontSize: 14, cursor: "pointer", color: "#475569",
+                    }} title="Gestionar categorías">
+                      ⚙️
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div style={styles.field}>
@@ -272,9 +312,155 @@ export default function Products() {
           </div>
         </div>
       )}
+
+      {/* Modal gestionar categorías */}
+      {showCatModal && (
+        <CatModal
+          categories={categories}
+          onClose={() => { setShowCatModal(false); setCatEditing(null); setCatForm({ name: "" }); }}
+          onRefresh={() => {
+            Promise.all([productsAPI.getAll(), categoriesAPI.getAll()])
+              .then(([pData, cData]) => { setProducts(pData); setCategories(cData); });
+          }}
+        />
+      )}
     </div>
   );
 }
+
+function CatModal({ categories, onClose, onRefresh }) {
+  const [catForm, setCatForm] = useState({ name: "" });
+  const [catEditing, setCatEditing] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
+
+  const reset = () => { setCatForm({ name: "" }); setCatEditing(null); };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!catForm.name.trim()) { toast.error("El nombre es obligatorio"); return; }
+    setFormLoading(true);
+    try {
+      if (catEditing) {
+        await categoriesAPI.update(catEditing.id, catForm);
+        toast.success("Categoría actualizada");
+      } else {
+        await categoriesAPI.create(catForm);
+        toast.success("Categoría creada");
+      }
+      reset();
+      onRefresh();
+    } catch (err) {
+      toast.error(err.message || "Error guardando categoría");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDelete = async (cat) => {
+    if (!confirm(`¿Eliminar categoría "${cat.name}"?`)) return;
+    try {
+      await categoriesAPI.delete(cat.id);
+      toast.success("Categoría eliminada");
+      onRefresh();
+    } catch (err) {
+      toast.error(err.message || err.message);
+    }
+  };
+
+  return (
+    <div style={catStyles.overlay} onClick={() => { onClose(); reset(); }}>
+      <div style={catStyles.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={catStyles.modalTitle}>Gestionar categorías</h2>
+          <button onClick={() => { onClose(); reset(); }} style={catStyles.closeBtn}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+          <input
+            value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
+            placeholder={catEditing ? "Editar categoría..." : "Nueva categoría..."}
+            required style={catStyles.input}
+          />
+          <button type="submit" disabled={formLoading} style={catStyles.saveBtn}>
+            {formLoading ? "..." : catEditing ? "Actualizar" : "Agregar"}
+          </button>
+          {catEditing && (
+            <button type="button" onClick={reset} style={catStyles.cancelBtn}>Cancelar</button>
+          )}
+        </form>
+
+        {categories.length === 0 ? (
+          <p style={{ color: "#94a3b8", fontSize: 14, textAlign: "center", padding: 20 }}>
+            No hay categorías registradas.
+          </p>
+        ) : (
+          <table style={catStyles.table}>
+            <thead>
+              <tr>
+                {["Nombre", "Productos", "Acciones"].map((h) => (
+                  <th key={h} style={catStyles.th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((c) => (
+                <tr key={c.id} style={catStyles.tr}>
+                  <td style={{ ...catStyles.td, fontWeight: 600 }}>{c.name}</td>
+                  <td style={catStyles.td}>{c.product_count || 0}</td>
+                  <td style={catStyles.td}>
+                    <button onClick={() => { setCatEditing(c); setCatForm({ name: c.name }); }} style={catStyles.editBtn}>Editar</button>
+                    <button onClick={() => handleDelete(c)} style={catStyles.deleteBtn}>Eliminar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const catStyles = {
+  overlay: {
+    position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+    display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300,
+  },
+  modal: {
+    background: "#fff", borderRadius: 20, padding: "28px",
+    width: "100%", maxWidth: 500, boxShadow: "0 8px 40px rgba(0,0,0,0.15)",
+  },
+  modalTitle: { fontSize: 18, fontWeight: 700, color: "#0f172a", margin: 0 },
+  closeBtn: { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#94a3b8", padding: "4px 8px" },
+  input: {
+    flex: 1, padding: "10px 12px", border: "1.5px solid #e2e8f0",
+    borderRadius: 10, fontSize: 14, outline: "none", color: "#0f172a",
+  },
+  saveBtn: {
+    padding: "10px 18px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+    color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+  },
+  cancelBtn: {
+    padding: "10px 16px", background: "transparent", border: "1.5px solid #e2e8f0",
+    borderRadius: 10, fontSize: 14, fontWeight: 600, color: "#64748b", cursor: "pointer",
+  },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 14 },
+  th: {
+    textAlign: "left", fontSize: 12, fontWeight: 600, color: "#94a3b8",
+    textTransform: "uppercase", letterSpacing: "0.5px",
+    padding: "10px 12px", borderBottom: "1px solid #f1f5f9", background: "#fafafa",
+  },
+  tr: { borderBottom: "1px solid #f8fafc" },
+  td: { padding: "10px 12px", fontSize: 13, color: "#334155" },
+  editBtn: {
+    padding: "5px 10px", background: "#eef2ff", color: "#4f46e5",
+    border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", marginRight: 6,
+  },
+  deleteBtn: {
+    padding: "5px 10px", background: "#fef2f2", color: "#dc2626",
+    border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
+  },
+};
 
 const styles = {
   page: { minHeight: "100vh", background: "#f8fafc", fontFamily: "'Segoe UI', system-ui, sans-serif" },
@@ -321,6 +507,7 @@ const styles = {
   tr: { borderBottom: "1px solid #f8fafc" },
   td: { padding: "14px 20px", fontSize: 14, color: "#334155" },
   badge: { padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 },
+  catBadge: { padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 500 },
   editBtn: {
     padding: "6px 12px", background: "#eef2ff", color: "#4f46e5",
     border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600,

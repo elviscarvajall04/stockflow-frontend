@@ -15,7 +15,7 @@ export default function Clients() {
   const [showDetail, setShowDetail] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", client_type: "final" });
   const [formLoading, setFormLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -31,7 +31,7 @@ export default function Clients() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", email: "", phone: "", address: "" });
+    setForm({ name: "", email: "", phone: "", address: "", client_type: "final" });
     setShowModal(true);
   };
 
@@ -42,6 +42,7 @@ export default function Clients() {
       email: client.email || "",
       phone: client.phone || "",
       address: client.address || "",
+      client_type: client.client_type || "final",
     });
     setShowModal(true);
   };
@@ -155,7 +156,7 @@ export default function Clients() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  {["ID", "Nombre", "Email", "Teléfono", "Registrado", "Acciones"].map((h) => (
+                  {["ID", "Nombre", "Tipo", "Email", "Teléfono", "Registrado", "Acciones"].map((h) => (
                     <th key={h} style={styles.th}>{h}</th>
                   ))}
                 </tr>
@@ -168,10 +169,19 @@ export default function Clients() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((c) => (
+                    filtered.map((c) => (
                     <tr key={c.id} style={styles.tr}>
                       <td style={styles.td}>#{c.id}</td>
                       <td style={{ ...styles.td, fontWeight: 600, color: "#0f172a" }}>{c.name}</td>
+                      <td style={styles.td}>
+                        <span style={{
+                          padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                          background: c.client_type === "fiscal" ? "#eef2ff" : "#f0fdf4",
+                          color: c.client_type === "fiscal" ? "#4f46e5" : "#059669",
+                        }}>
+                          {c.client_type === "fiscal" ? "Crédito Fiscal" : "Consumidor Final"}
+                        </span>
+                      </td>
                       <td style={styles.td}>{c.email || "—"}</td>
                       <td style={styles.td}>{c.phone || "—"}</td>
                       <td style={styles.td}>
@@ -252,6 +262,18 @@ export default function Clients() {
                   placeholder="Calle, ciudad, país"
                   style={styles.input}
                 />
+              </div>
+              <div style={styles.field}>
+                <label style={styles.label}>Tipo de cliente</label>
+                <select
+                  name="client_type"
+                  value={form.client_type}
+                  onChange={handleChange}
+                  style={styles.input}
+                >
+                  <option value="final">Consumidor Final (NCF B02)</option>
+                  <option value="fiscal">Crédito Fiscal (NCF B01)</option>
+                </select>
               </div>
               <div style={styles.modalBtns}>
                 <button type="button" onClick={closeModal} style={styles.cancelBtn}>

@@ -1,6 +1,23 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 export function useExportPDF() {
   const exportProducts = (products) => {
     const doc = new jsPDF();
@@ -96,20 +113,37 @@ export function useExportPDF() {
     doc.save("ventas-stockflow.pdf");
   };
 
-  const exportInvoice = (sale, company) => {
+  const exportInvoice = async (sale, company) => {
     const doc = new jsPDF();
 
+    // Logo
+    let logoDataUrl = null;
+    if (company?.logo_url) {
+      try {
+        const origin = (import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "");
+        logoDataUrl = await loadImage(`${origin}${company.logo_url}`);
+      } catch {
+        // logo failed to load, skip
+      }
+    }
+
     // Encabezado empresa
+    let nameX = 14;
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, "PNG", 14, 14, 24, 24);
+      nameX = 44;
+    }
     doc.setFontSize(22);
     doc.setTextColor(79, 70, 229);
-    doc.text(company?.company_name || "StockFlow RD", 14, 22);
+    doc.text(company?.company_name || "StockFlow RD", nameX, 22);
 
     doc.setFontSize(9);
     doc.setTextColor(100, 116, 139);
-    if (company?.rnc) doc.text(`RNC: ${company.rnc}`, 14, 30);
-    if (company?.phone) doc.text(`Tel: ${company.phone}`, 14, 35);
-    if (company?.address) doc.text(`Dir: ${company.address}`, 14, 40);
-    if (company?.email) doc.text(`Email: ${company.email}`, 14, 45);
+    let infoY = 30;
+    if (company?.rnc) { doc.text(`RNC: ${company.rnc}`, nameX, infoY); infoY += 5; }
+    if (company?.phone) { doc.text(`Tel: ${company.phone}`, nameX, infoY); infoY += 5; }
+    if (company?.address) { doc.text(`Dir: ${company.address}`, nameX, infoY); infoY += 5; }
+    if (company?.email) { doc.text(`Email: ${company.email}`, nameX, infoY); infoY += 5; }
 
     // Comprobante fiscal
     doc.setFontSize(16);
@@ -127,7 +161,7 @@ export function useExportPDF() {
     doc.text(`Vendedor: ${sale.user_name || ""}`, 140, 42);
 
     // Cliente
-    const clientY = company?.rnc ? 55 : 50;
+    const clientY = infoY + 5;
     doc.setDrawColor(226, 232, 240);
     doc.line(14, clientY, 196, clientY);
 
@@ -209,5 +243,136 @@ export function useExportPDF() {
     doc.save(`factura-${sale.ncf || sale.sale_id || "unknown"}.pdf`);
   };
 
-  return { exportProducts, exportSales, exportInvoice };
+  const exportCreditNote = async (sale, company) => {
+    const doc = new jsPDF();
+
+    // Logo
+    let logoDataUrl = null;
+    if (company?.logo_url) {
+      try {
+        const origin = (import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "");
+        logoDataUrl = await loadImage(`${origin}${company.logo_url}`);
+      } catch {
+        /* skip */
+      }
+    }
+
+    let nameX = 14;
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, "PNG", 14, 14, 24, 24);
+      nameX = 44;
+    }
+    doc.setFontSize(22);
+    doc.setTextColor(220, 38, 38);
+    doc.text("NOTA DE CRÉDITO", nameX, 22);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    let infoY = 30;
+    if (company?.company_name) { doc.text(company.company_name, nameX, infoY); infoY += 5; }
+    if (company?.rnc) { doc.text(`RNC: ${company.rnc}`, nameX, infoY); infoY += 5; }
+    if (company?.phone) { doc.text(`Tel: ${company.phone}`, nameX, infoY); infoY += 5; }
+    if (company?.address) { doc.text(`Dir: ${company.address}`, nameX, infoY); infoY += 5; }
+    if (company?.email) { doc.text(`Email: ${company.email}`, nameX, infoY); infoY += 5; }
+
+    // Comprobante fiscal referencia
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42);
+    doc.text("ANULACIÓN DE FACTURA", 140, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(220, 38, 38);
+    doc.text(sale.ncf || "", 140, 30);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Fecha anulación: ${new Date().toLocaleDateString("es-DO", {
+      day: "2-digit", month: "long", year: "numeric",
+    })}`, 140, 37);
+    doc.text(`Factura original: ${new Date(sale.created_at).toLocaleDateString("es-DO", {
+      day: "2-digit", month: "long", year: "numeric",
+    })}`, 140, 42);
+
+    // Cliente
+    const clientY = infoY + 5;
+    doc.setDrawColor(226, 232, 240);
+    doc.line(14, clientY, 196, clientY);
+
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Cliente:", 14, clientY + 8);
+    doc.setFontSize(10);
+    doc.setTextColor(51, 65, 85);
+    doc.text(sale.client_name || "Consumidor Final", 14, clientY + 16);
+
+    // Tabla productos anulados
+    const tableStartY = clientY + 24;
+    const items = Array.isArray(sale.items) ? sale.items : [];
+
+    autoTable(doc, {
+      startY: tableStartY,
+      head: [["Producto", "Cant.", "Precio", "ITBIS", "Subtotal"]],
+      body: items.map((item) => {
+        const qty = Number(item.quantity) || 1;
+        const price = Number(item.price) || 0;
+        const itbisRate = Number(item.itbis_rate || 18);
+        const itemSubtotal = price * qty;
+        const itemItbis = itemSubtotal * (itbisRate / 100);
+        return [
+          item.product_name || "Producto",
+          qty.toString(),
+          `$${price.toLocaleString("es-DO")}`,
+          `$${itemItbis.toLocaleString("es-DO")}`,
+          `$${(itemSubtotal + itemItbis).toLocaleString("es-DO")}`,
+        ];
+      }),
+      headStyles: {
+        fillColor: [220, 38, 38],
+        textColor: 255,
+        fontStyle: "bold",
+        fontSize: 10,
+      },
+      bodyStyles: { fontSize: 9, textColor: [100, 100, 100] },
+      alternateRowStyles: { fillColor: [255, 245, 245] },
+      styles: { cellPadding: 5 },
+    });
+
+    // Totales anulados
+    const fy = doc.lastAutoTable.finalY + 12;
+    const subtotal = Number(sale.subtotal) || 0;
+    const itbis = Number(sale.itbis_total) || 0;
+    const total = Number(sale.total) || 0;
+
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Subtotal:", 140, fy);
+    doc.text(`-$${subtotal.toLocaleString("es-DO")}`, 170, fy, { align: "right" });
+
+    doc.setTextColor(220, 38, 38);
+    doc.text("ITBIS:", 140, fy + 7);
+    doc.text(`-$${itbis.toLocaleString("es-DO")}`, 170, fy + 7, { align: "right" });
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(140, fy + 11, 196, fy + 11);
+
+    doc.setFontSize(13);
+    doc.setTextColor(220, 38, 38);
+    doc.text("Total anulado:", 140, fy + 20);
+    doc.text(`-$${total.toLocaleString("es-DO")}`, 170, fy + 20, { align: "right" });
+
+    // Stock restaurado
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text("El stock de todos los productos fue restaurado.", 14, fy + 12);
+
+    // NCF info
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    const ncfTypes = { B01: "Factura de Crédito Fiscal", B02: "Factura de Consumo" };
+    doc.text(`NCF Original: ${sale.ncf_type || "B02"} — ${ncfTypes[sale.ncf_type] || ""}`, 14, fy + 18);
+    doc.text(`Generado por StockFlow RD — ${new Date().toLocaleString("es-DO")}`, 14, fy + 24);
+
+    doc.save(`nota-credito-${sale.ncf || sale.sale_id || "unknown"}.pdf`);
+  };
+
+  return { exportProducts, exportSales, exportInvoice, exportCreditNote };
 }

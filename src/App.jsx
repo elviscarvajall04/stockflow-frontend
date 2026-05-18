@@ -10,6 +10,9 @@ import Clients from "./pages/Clients";
 import Settings from "./pages/Settings";
 import Suppliers from "./pages/Suppliers";
 import Purchases from "./pages/Purchases";
+import DgiiReport from "./pages/DgiiReport";
+import InventoryMovements from "./pages/InventoryMovements";
+import Profit from "./pages/Profit";
 
 function PrivateRoute({ children }) {
   const { token, loading } = useAuth();
@@ -132,6 +135,30 @@ export default function App() {
             element={
               <PrivateRoute>
                 <Purchases />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/kardex"
+            element={
+              <PrivateRoute>
+                <InventoryMovements />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dgii"
+            element={
+              <AdminRoute>
+                <DgiiReport />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/profit"
+            element={
+              <PrivateRoute>
+                <Profit />
               </PrivateRoute>
             }
           />
